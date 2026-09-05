@@ -1,0 +1,2772 @@
+<!DOCTYPE html>
+<html lang="en">
+<body oncontextmenu="return false">
+<!-- ============ STARTUP LOGIN GATE ============
+     Blocks the whole app until the correct Login ID/Password are entered.
+     To change the credentials later, edit GATE_ID / GATE_PW in the script
+     just below the form. This is a deterrent against casual/unauthorized
+     opening on a shared PC, the same way the existing "Unmask confidential
+     figures" password works elsewhere in this app - it is not protection
+     against a technically determined person, since the credentials live in
+     this file's own plain-text source. -->
+<div id="loginGateOverlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0c2d4d,#081d33 70%);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+  <form id="loginGateForm" style="background:#ffffff;border-radius:10px;padding:36px 40px;width:320px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center;">
+    <div style="font-size:18px;font-weight:700;color:#0c2d4d;margin-bottom:4px;">EIL Proposal Management Tool</div>
+    <div style="font-size:12.5px;color:#5b6b78;margin-bottom:20px;">Please log in to continue</div>
+    <input id="loginGateId" type="text" autocomplete="username" placeholder="Login ID" style="width:100%;padding:10px 12px;margin-bottom:10px;border:1px solid #d7dee4;border-radius:6px;font-size:14px;box-sizing:border-box;">
+    <input id="loginGatePw" type="password" autocomplete="current-password" placeholder="Password" style="width:100%;padding:10px 12px;margin-bottom:14px;border:1px solid #d7dee4;border-radius:6px;font-size:14px;box-sizing:border-box;">
+    <button type="submit" style="width:100%;padding:10px;border:none;border-radius:6px;background:#2f7dc0;color:#fff;font-size:14.5px;font-weight:600;cursor:pointer;">Login</button>
+    <div id="loginGateError" style="min-height:18px;margin-top:10px;color:#b5401f;font-size:12.5px;"></div>
+  </form>
+</div>
+<script>
+(function(){
+  // ---- Change these two values to update the app's login credentials ----
+  const GATE_ID = "admin";
+  const GATE_PW = "bharat";
+  // -------------------------------------------------------------------
+
+  const overlay = document.getElementById('loginGateOverlay');
+  const form = document.getElementById('loginGateForm');
+  const idInput = document.getElementById('loginGateId');
+  const pwInput = document.getElementById('loginGatePw');
+  const errEl = document.getElementById('loginGateError');
+  if(!overlay || !form) return; // safety - never let a markup issue block the whole app
+
+  idInput.focus();
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    const id = idInput.value.trim();
+    const pw = pwInput.value;
+    if(id === GATE_ID && pw === GATE_PW){
+      overlay.remove();
+    } else {
+      errEl.textContent = "Invalid login ID or password.";
+      pwInput.value = "";
+      pwInput.focus();
+    }
+  });
+})();
+</script>
+<div class="eil-watermark"></div>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EIL Proposal Management Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{
+  --navy:#0c2d4d;
+  --navy-deep:#081d33;
+  --steel:#2e6b96;
+  --steel-light:#5b93b8;
+  --header-blue-1:#2f7dc0;
+  --header-blue-2:#4fa3dc;
+  --header-blue-3:#8ecdf0;
+  --paper:#f4f6f8;
+  --card:#ffffff;
+  --ink:#16232f;
+  --muted:#5b6b78;
+  --line:#d7dee4;
+  --input-yellow:#fff4b8;
+  --input-yellow-border:#e2b93d;
+  --pc-blue:#dcebf7;
+  --pc-blue-border:#7fb2d8;
+  --calc-grey:#eef1f3;
+  --good:#2f7d5b;
+  --warn:#b5401f;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:"Segoe UI",Arial,Helvetica,sans-serif;}
+header.topbar{
+  background:linear-gradient(120deg,var(--header-blue-1),var(--header-blue-2) 60%,var(--header-blue-3));
+  color:#eef4f9;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 10px rgba(0,0,0,.25);position:sticky;top:0;z-index:50;
+}
+header.topbar .btn.ghost{color:#fff;}
+header.topbar .brand{display:flex;flex-direction:column;gap:2px;}
+header.topbar .brand .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#a9c6dd;font-weight:600;}
+header.topbar .brand h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em;}
+header.topbar .brand .sub{font-size:12px;color:#c8dbea;margin-top:2px;}
+header.topbar .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.btn{
+  border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;
+  padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;
+  transition:background .15s ease;white-space:nowrap;
+}
+.btn:hover{background:rgba(255,255,255,.2);}
+.btn.primary{background:#e8a33d;border-color:#e8a33d;color:#241300;}
+.btn.primary:hover{background:#f2b559;}
+.btn.small{padding:5px 10px;font-size:12px;}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--navy);}
+.btn.ghost:hover{background:#eef2f5;}
+input[type=file]{display:none;}
+
+nav.tabs{
+  display:flex;gap:2px;background:var(--navy-deep);padding:0 24px;overflow-x:auto;
+  position:sticky;top:66px;z-index:49;box-shadow:0 2px 6px rgba(0,0,0,.15);
+}
+nav.tabs button{
+  background:transparent;border:none;color:#a9c2d4;padding:12px 16px;font-size:13px;font-weight:600;
+  cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;letter-spacing:.02em;
+}
+nav.tabs button:hover{color:#fff;}
+nav.tabs button.active{color:#fff;border-bottom-color:var(--good) ;background:rgba(255,255,255,.06);}
+
+main{max-width:1400px;margin:0 auto;padding:22px 24px 80px;}
+.sheet{display:none;}
+.sheet.active{display:block;animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(16,40,60,.05);}
+.card h2{margin:0 0 4px;font-size:16px;color:var(--navy);letter-spacing:.01em;}
+.card .desc{font-size:12.5px;color:var(--muted);margin-bottom:14px;}
+.grid{display:grid;gap:14px;}
+.grid.cols-2{grid-template-columns:1fr 1fr;}
+.grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.field .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+.input-yellow, select.input-yellow, input.input-yellow{
+  background:var(--input-yellow);border:1px solid var(--input-yellow-border);border-radius:5px;
+  padding:8px 10px;font-size:13px;width:100%;color:var(--ink);font-weight:600;
+}
+.input-yellow:focus{outline:2px solid var(--steel);outline-offset:1px;}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 4px;}
+.legend .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
+.legend .sw-yellow{background:var(--input-yellow);border:1px solid var(--input-yellow-border);}
+.legend .sw-blue{background:var(--pc-blue);border:1px solid var(--pc-blue-border);}
+.legend .sw-grey{background:var(--calc-grey);border:1px solid var(--line);}
+
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+table.data th{
+  background:var(--navy);color:#fff;padding:8px 8px;text-align:left;position:sticky;top:0;
+  font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;
+}
+table.data td{padding:5px 7px;border-bottom:1px solid var(--line);border-right:1px solid #edf1f4;}
+table.data tbody tr:hover{background:#f6fafc;}
+table.data tfoot td{font-weight:800;background:#eaf1f6;border-top:2px solid var(--steel);color:var(--navy);}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:70vh;overflow-y:auto;}
+
+/* MHs sheet: freeze header row(s) on vertical scroll, and the Discipline column on horizontal scroll */
+#mhsThead tr:first-child th{position:sticky;top:0;z-index:5;}
+#mhsThead tr:nth-child(2) th{position:sticky;top:32px;z-index:5;}
+#mhsTable .mhs-frozen-col{position:sticky;left:0;z-index:3;background:var(--card);box-shadow:2px 0 4px rgba(16,40,60,.08);}
+#mhsThead th.mhs-frozen-col{z-index:7;background:var(--navy);}
+#mhsTfoot td.mhs-frozen-col{z-index:4;background:#eaf1f6;}
+td input.cell-input{width:90px;padding:5px 6px;border:1px solid var(--input-yellow-border);background:var(--input-yellow);border-radius:4px;font-size:12.5px;font-weight:600;}
+td input.cell-input.pc{border-color:var(--pc-blue-border);background:var(--pc-blue);}
+td input.cell-input.text{width:100%;min-width:160px;}
+td.calc{background:var(--calc-grey);font-weight:700;color:var(--navy);text-align:right;}
+td.num{text-align:right;}
+.rownum{color:var(--muted);width:34px;text-align:center;}
+.addrow{margin-top:10px;}
+.dep-group-tag{font-size:10px;padding:2px 6px;border-radius:10px;background:var(--steel);color:#fff;font-weight:700;letter-spacing:.03em;}
+
+.kpi-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 16px;min-width:180px;flex:1;}
+.kpi .label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;}
+.kpi .value{font-size:20px;font-weight:800;color:var(--navy);margin-top:4px;}
+.kpi.final .value{color:var(--warn);}
+
+.levels-table td.lvl-label{font-weight:700;color:var(--navy);}
+.chart-wrap{border:1px solid var(--line);border-radius:8px;background:#fff;padding:14px;}
+svg text{font-family:inherit;}
+.footnote{font-size:11px;color:var(--muted);margin-top:10px;}
+.section-title{font-size:13px;font-weight:800;color:var(--navy);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.04em;border-left:4px solid var(--steel);padding-left:8px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:900px){.two-col,.grid.cols-2,.grid.cols-3{grid-template-columns:1fr;}}
+select{padding:7px 8px;border-radius:5px;}
+
+.eil-watermark{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:9999;
+  display:flex;align-items:center;justify-content:center;
+  background-image:url('data:image/jpeg;base64,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');
+  background-repeat:repeat;background-size:220px 220px;
+  opacity:.08;mix-blend-mode:multiply;
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="eyebrow">Engineers India Limited &middot; Proposal Management Tool (Template by Bharat Shukla)</span>
+    <h1 id="projTitle">Proposal Input Template</h1>
+    <span class="sub">Generic template &mdash; customise per proposal</span>
+  </div>
+  <div class="actions">
+    <span id="progressStatus" style="align-self:center;font-size:12px;color:#c8dbea;margin-right:4px;"></span>
+    <span id="dbStatus" style="align-self:center;font-size:12px;color:#c8dbea;margin-right:4px;"></span>
+    <button class="btn ghost" id="saveProgressBtn">Save Progress</button>
+    <button class="btn ghost" id="loadProgressBtn">Load Progress</button>
+    <button class="btn ghost" id="loadDemoBtn">Load sample data</button>
+    <label class="btn ghost" for="importFile">Import from Excel</label>
+    <input type="file" id="importFile" accept=".xlsx,.xls">
+    <button class="btn ghost" id="exportDbBtn">Export to Database</button>
+    <button class="btn primary" id="exportBtn">Export to Excel (.xlsx)</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-sheet="input" class="active">1. Input Sheet</button>
+  <button data-sheet="mhs">2. MHs Sheet</button>
+  <button data-sheet="deployment">3. Deployment</button>
+  <button data-sheet="calc">4. Calculation</button>
+  <button data-sheet="tpoem">5. 3rd Party &amp; OEM</button>
+  <button data-sheet="sitevisit">6. Site Visit</button>
+  <button data-sheet="othercost">7. Other Cost</button>
+  <button data-sheet="summary">8. Summary</button>
+</nav>
+
+<main>
+
+<!-- ============ 1. INPUT SHEET ============ -->
+<section class="sheet active" id="sheet-input">
+  <div class="card">
+    <h2>Project Basics</h2>
+    <div class="legend">
+      <span><span class="swatch sw-yellow"></span>User input cell</span>
+    </div>
+    <div class="grid cols-3">
+      <div class="field">
+        <label>Proposal No.</label>
+        <div style="display:flex;gap:6px;">
+          <select class="input-yellow" id="in_proposalPrefix" style="flex:0 0 90px;">
+            <option value="IA">IA</option>
+            <option value="PA">PA</option>
+          </select>
+          <input type="text" class="input-yellow" id="in_proposalNo" placeholder="e.g. 1234" maxlength="4" inputmode="numeric" style="flex:1;">
+        </div>
+        <div class="hint">4-digit number. Combined with the prefix (e.g. IA-1234), this is the unique proposal identifier used as the 1st column in the database.</div>
+      </div>
+      <div class="field">
+        <label>Name of the Project</label>
+        <input type="text" class="input-yellow" id="in_projName" placeholder="e.g. Offshore Field Development &ndash; Package X">
+      </div>
+      <div class="field" id="fld_schedule">
+        <label>Overall Project Schedule (months)</label>
+        <select class="input-yellow" id="in_schedule"></select>
+        <div class="hint">Used for the consolidated deployment of the overall Project. When more than 1 package is used, each package's own deployment instead follows its own schedule (below).</div>
+      </div>
+      <div class="field">
+        <label>Number of Packages</label>
+        <select class="input-yellow" id="in_numPackages"></select>
+        <div class="hint">If more than 1, the MHs, Deployment, Costing and Summary sheets will be split package-wise, plus a consolidated view.</div>
+      </div>
+      <div class="field" id="fld_progressSingle" style="display:none;">
+        <label>Progress % <span style="font-weight:400;text-transform:none;">(Current FY / Next FY &mdash; must sum to 100%)</span></label>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="number" class="input-yellow" id="in_progCurSingle" min="0" max="100" placeholder="Current FY %" style="flex:1;">
+          <input type="number" class="input-yellow" id="in_progNextSingle" min="0" max="100" placeholder="Next FY %" style="flex:1;">
+        </div>
+        <div class="hint" id="progSumHintSingle"></div>
+      </div>
+      <div class="field">
+        <label>Sector</label>
+        <select class="input-yellow" id="in_sector"></select>
+      </div>
+      <div class="field">
+        <label>Nature of Project</label>
+        <select class="input-yellow" id="in_nature"><option value="">-- Select Sector first --</option></select>
+        <input type="text" class="input-yellow" id="in_natureOther" placeholder="Please specify" style="display:none;margin-top:6px;" disabled>
+      </div>
+      <div class="field">
+        <label>Project Phase</label>
+        <select class="input-yellow" id="in_phase"></select>
+      </div>
+      <div class="field">
+        <label>Applicable Standard / Specification</label>
+        <select class="input-yellow" id="in_appStd"></select>
+        <input type="text" class="input-yellow" id="in_appStdOther" placeholder="Please specify" style="display:none;margin-top:6px;" disabled>
+      </div>
+      <div class="field">
+        <label>Project Location</label>
+        <select class="input-yellow" id="in_location"></select>
+        <input type="text" class="input-yellow" id="in_locationOther" placeholder="Please specify" style="display:none;margin-top:6px;" disabled>
+      </div>
+      <div class="field">
+        <label>Client Type</label>
+        <select class="input-yellow" id="in_clientType"></select>
+      </div>
+      <div class="field">
+        <label>Client's Name</label>
+        <select class="input-yellow" id="in_clientName"><option value="">-- Select Client Type first --</option></select>
+        <input type="text" class="input-yellow" id="in_clientNameFreeform" placeholder="Enter client name" style="display:none;margin-top:6px;">
+        <input type="text" class="input-yellow" id="in_clientNameOther" placeholder="Please specify client name" style="display:none;margin-top:6px;" disabled>
+      </div>
+      <div class="field">
+        <label>Currency</label>
+        <select class="input-yellow" id="in_currency"></select>
+        <input type="text" class="input-yellow" id="in_currencyOther" placeholder="Please specify" style="display:none;margin-top:6px;" disabled>
+        <div class="hint">Used to label figures on the Summary Sheet (no exchange-rate conversion is applied &mdash; all underlying calculations remain in USD).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="packageDetailsCard" style="display:none;">
+    <h2>Package Details</h2>
+    <div class="desc">Enter a name and schedule duration for each package, plus its Progress % split between Current FY and Next FY (must sum to 100%). These drive the package-wise columns/sections on the MHs, Deployment, Costing and Summary sheets.</div>
+    <div class="tablewrap" style="max-height:none;">
+      <table class="data" id="packagesTable">
+        <thead><tr><th class="rownum">#</th><th>Package Name</th><th style="width:180px;">Schedule (months)</th><th style="width:150px;">Progress % &ndash; Current FY</th><th style="width:150px;">Progress % &ndash; Next FY</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Project Payment Plan</h2>
+    <div class="desc">Lumpsum (L) or Reimbursable (R) basis for each cost component.</div>
+    <div class="tablewrap" style="max-height:none;">
+      <table class="data" id="paymentPlanTable">
+        <thead><tr><th>Cost Component</th><th style="width:160px;">Basis</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Manpower Distribution</h2>
+    <div class="grid cols-2">
+      <div class="field">
+        <label>Home Office (x %)</label>
+        <input type="number" class="input-yellow" id="in_homePct" value="60" min="0" max="100">
+      </div>
+      <div class="field">
+        <label>EIL AD Office (y %)</label>
+        <input type="number" class="input-yellow" id="in_adPct" value="40" min="0" max="100">
+      </div>
+    </div>
+    <div class="footnote" id="manpowerCheck"></div>
+
+    <div class="two-col" style="margin-top:14px;">
+      <div>
+        <div class="section-title">Home Office</div>
+        <div class="grid cols-2">
+          <div class="field"><label>Regular (a %)</label><input type="number" class="input-yellow" id="in_homeRegular" value="70" min="0" max="100"></div>
+          <div class="field"><label>Outsourced (100&minus;a %)</label><input type="text" class="input-yellow" id="in_homeOutsourced" readonly></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">EIL AD Office</div>
+        <div class="grid cols-2">
+          <div class="field"><label>Regular (b %)</label><input type="number" class="input-yellow" id="in_adRegular" value="80" min="0" max="100"></div>
+          <div class="field"><label>Outsourced (100&minus;b %)</label><input type="text" class="input-yellow" id="in_adOutsourced" readonly></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Level-wise Break-up &amp; MHs Rate <span style="font-weight:400;color:var(--muted);font-size:11px;">(rate cells are confidential &mdash; restrict sharing of this sheet)</span></h2>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div class="field">
+        <label>MHs in a month, K</label>
+        <input type="number" class="input-yellow" id="in_K" value="160" min="1">
+        <div class="hint">Standard man-hours per man-month, used to derive Man-Month (MM) values.</div>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="unmaskChk" style="width:16px;height:16px;"> Unmask confidential figures (Rate &amp; Final Cost)
+        </label>
+        <div class="hint" id="maskStatusLabel">Confidential figures are masked and locked.</div>
+        <button type="button" class="btn ghost" id="changePwBtn" style="display:none;margin-top:8px;padding:5px 10px;font-size:11.5px;">Change Password</button>
+      </div>
+    </div>
+    <div class="two-col">
+      <div>
+        <div class="section-title">Regular Employees (Level 10&ndash;18)</div>
+        <div class="tablewrap" style="max-height:420px;">
+          <table class="data levels-table" id="levelBreakupTable">
+            <thead><tr><th>Level</th><th>Break-up %</th><th>Rate (USD/MH)</th><th>Indicative Cost (USD)</th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td class="lvl-label">Total</td><td class="calc" id="lvlPctTotal">0%</td><td></td><td class="calc" id="lvlCostTotal">$0</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Outsourced Employees</div>
+        <div class="tablewrap" style="max-height:420px;">
+          <table class="data levels-table" id="outsourcedBreakupTable">
+            <thead><tr><th>Category</th><th>Break-up %</th><th>Rate (USD/MH)</th><th>Indicative Cost (USD)</th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td class="lvl-label">Total</td><td class="calc" id="outPctTotal">0%</td><td></td><td class="calc" id="outCostTotal">$0</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="footnote">Indicative Cost = Break-up % &times; Total Regular/Outsourced Man-hours (from Calculation Sheet) &times; Rate. Values populate once MHs Sheet is filled.</div>
+  </div>
+</section>
+
+<!-- ============ 2. MHs SHEET ============ -->
+<section class="sheet" id="sheet-mhs">
+  <div class="card">
+    <h2>Discipline-wise Man-hours (MHs)</h2>
+    <div class="desc">Column 1 is filled by the discipline lead; Column 2 is the Proposal Co-ordinator's assumed value. Estimated MHs = MIN(Col&nbsp;1, Col&nbsp;2); however, if either column is blank/0, Estimated MHs takes the value of whichever column is greater than 0. Man-Month (MM) = Estimated MHs &divide; K (from Input Sheet).</div>
+    <div class="legend">
+      <span><span class="swatch sw-yellow"></span>MHs by Discipline</span>
+      <span><span class="swatch sw-blue"></span>Assumed MHs by PC</span>
+      <span><span class="swatch sw-grey"></span>Calculated</span>
+    </div>
+    <div class="tablewrap">
+      <table class="data" id="mhsTable">
+        <thead id="mhsThead"></thead>
+        <tbody></tbody>
+        <tfoot id="mhsTfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. DEPLOYMENT SHEET ============ -->
+<section class="sheet" id="sheet-deployment">
+  <div id="depPkgTabs" style="display:none;margin-bottom:10px;"></div>
+  <div class="card">
+    <h2>Manpower Deployment Histogram</h2>
+    <div class="desc">Man-Month (MM) for each discipline (from MHs Sheet) is distributed across the project schedule in a parabolic (bell-shaped) build-up/de-mobilisation curve. Each bar is a month; each colour segment is a discipline (hover a segment for its value), and the number above each bar is that month's total headcount.</div>
+    <div class="chart-wrap"><svg id="depChart" viewBox="0 0 1000 380" style="width:100%;height:380px;"></svg></div>
+    <div class="footnote">X-axis: project month (M1, M2, &hellip;). Y-axis: number of persons deployed that month, stacked by discipline.</div>
+  </div>
+
+  <div class="card">
+    <h2>Grouped Deployment (Man-Months per Month)</h2>
+    <div class="tablewrap">
+      <table class="data" id="depGroupTable">
+        <thead><tr><th>Discipline Group</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td>Total</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Discipline-wise Deployment (Man-Months per Month)</h2>
+    <div class="tablewrap">
+      <table class="data" id="depTable">
+        <thead><tr><th>Discipline</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td>Total</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. CALCULATION SHEET ============ -->
+<section class="sheet" id="sheet-calc">
+  <div class="card">
+    <h2 id="calcMainTitle">Discipline-wise MHs Costing (USD)</h2>
+    <div class="desc">Total Estimated MHs (from MHs Sheet) is split by Office (Home / AD), then by employee category (Regular / Outsourced), then by Level / Category, and priced using the rates from the Input Sheet.</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Total Estimated MHs</div><div class="value" id="calcTotalMHs">0</div></div>
+      <div class="kpi"><div class="label">Home Office MHs</div><div class="value" id="calcHomeMHs">0</div></div>
+      <div class="kpi"><div class="label">EIL AD Office MHs</div><div class="value" id="calcAdMHs">0</div></div>
+      <div class="kpi"><div class="label">Total MHs Cost (USD)</div><div class="value" id="calcTotalCost">$0</div></div>
+    </div>
+    <div class="two-col">
+      <div>
+        <div class="section-title">Home Office</div>
+        <div class="tablewrap" style="max-height:none;"><table class="data" id="calcHomeTable">
+          <thead><tr><th>Category</th><th>MHs</th><th>Rate (USD)</th><th>Cost (USD)</th></tr></thead><tbody></tbody>
+          <tfoot><tr><td>Sub-total</td><td class="calc" id="calcHomeMhsTot"></td><td></td><td class="calc" id="calcHomeCostTot"></td></tr></tfoot>
+        </table></div>
+      </div>
+      <div>
+        <div class="section-title">EIL AD Office</div>
+        <div class="tablewrap" style="max-height:none;"><table class="data" id="calcAdTable">
+          <thead><tr><th>Category</th><th>MHs</th><th>Rate (USD)</th><th>Cost (USD)</th></tr></thead><tbody></tbody>
+          <tfoot><tr><td>Sub-total</td><td class="calc" id="calcAdMhsTot"></td><td></td><td class="calc" id="calcAdCostTot"></td></tr></tfoot>
+        </table></div>
+      </div>
+    </div>
+  </div>
+  <div id="calcPkgBlocks"></div>
+</section>
+
+<!-- ============ 5. 3RD PARTY & OEM SHEET ============ -->
+<section class="sheet" id="sheet-tpoem">
+  <div class="two-col">
+    <div class="card">
+      <h2>Third Party Services</h2>
+      <div class="tablewrap" style="max-height:none;">
+        <table class="data" id="tpTable">
+          <thead><tr><th class="rownum">#</th><th>Third Party Service</th><th style="width:150px;">Cost (USD)</th><th style="width:150px;">Attachment</th><th style="width:40px;"></th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr><td colspan="2">Total</td><td class="calc" id="tpTotal">$0</td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <button class="btn ghost small addrow" data-add="tp">+ Add row</button>
+      <div class="footnote">One file may be attached per row. Attachments are held in this browser session for reference/download and are not embedded into the exported Excel file (the filename is recorded there instead).</div>
+    </div>
+    <div class="card">
+      <h2>OEM Services</h2>
+      <div class="tablewrap" style="max-height:none;">
+        <table class="data" id="oemTable">
+          <thead><tr><th class="rownum">#</th><th>OEM Service</th><th style="width:150px;">Cost (USD)</th><th style="width:150px;">Attachment</th><th style="width:40px;"></th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr><td colspan="2">Total</td><td class="calc" id="oemTotal">$0</td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <button class="btn ghost small addrow" data-add="oem">+ Add row</button>
+      <div class="footnote">One file may be attached per row. Attachments are held in this browser session for reference/download and are not embedded into the exported Excel file (the filename is recorded there instead).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. SITE VISIT SHEET ============ -->
+<section class="sheet" id="sheet-sitevisit">
+  <div class="card">
+    <h2>Site Visits</h2>
+    <div class="grid cols-2" style="max-width:420px;margin-bottom:14px;">
+      <div class="field"><label>Cost per site visit-day (USD) &mdash; optional</label><input type="number" class="input-yellow" id="in_visitRate" value="0" min="0"></div>
+    </div>
+    <div class="tablewrap" style="max-height:none;">
+      <table class="data" id="siteVisitTable">
+        <thead><tr>
+          <th class="rownum">#</th><th>Discipline</th>
+          <th style="width:90px;">No. of Persons (m)</th><th style="width:90px;">Visits (v)</th><th style="width:90px;">Days (d)</th>
+          <th style="width:120px;">Total Site-Visits (m&times;v&times;d)</th><th style="width:40px;"></th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="5">Total</td><td class="calc" id="svTotal">0</td><td></td></tr></tfoot>
+      </table>
+    </div>
+    <button class="btn ghost small addrow" data-add="sv">+ Add row</button>
+    <div class="footnote" id="svCostNote"></div>
+  </div>
+</section>
+
+<!-- ============ 7. OTHER COST SHEET ============ -->
+<section class="sheet" id="sheet-othercost">
+  <div class="card">
+    <h2>Hardware Cost</h2>
+    <div class="tablewrap" style="max-height:none;"><table class="data" id="hwTable">
+      <thead><tr><th class="rownum">#</th><th>Description</th><th style="width:150px;">Cost (USD)</th><th style="width:40px;"></th></tr></thead>
+      <tbody></tbody><tfoot><tr><td colspan="2">Total</td><td class="calc" id="hwTotal">$0</td><td></td></tr></tfoot>
+    </table></div>
+    <button class="btn ghost small addrow" data-add="hw">+ Add row</button>
+  </div>
+  <div class="card">
+    <h2>Software Cost</h2>
+    <div class="tablewrap" style="max-height:none;"><table class="data" id="swTable">
+      <thead><tr><th class="rownum">#</th><th>Description</th><th style="width:150px;">Cost (USD)</th><th style="width:40px;"></th></tr></thead>
+      <tbody></tbody><tfoot><tr><td colspan="2">Total</td><td class="calc" id="swTotal">$0</td><td></td></tr></tfoot>
+    </table></div>
+    <button class="btn ghost small addrow" data-add="sw">+ Add row</button>
+  </div>
+  <div class="card">
+    <h2>Office Infrastructure Cost</h2>
+    <div class="tablewrap" style="max-height:none;"><table class="data" id="ofTable">
+      <thead><tr><th class="rownum">#</th><th>Description</th><th style="width:150px;">Cost (USD)</th><th style="width:40px;"></th></tr></thead>
+      <tbody></tbody><tfoot><tr><td colspan="2">Total</td><td class="calc" id="ofTotal">$0</td><td></td></tr></tfoot>
+    </table></div>
+    <button class="btn ghost small addrow" data-add="of">+ Add row</button>
+  </div>
+</section>
+
+<!-- ============ 8. SUMMARY SHEET ============ -->
+<section class="sheet" id="sheet-summary">
+  <div class="card" id="summaryPkgCard" style="display:none;">
+    <h2>Package-wise MHs Cost</h2>
+    <div class="desc">Total MHs Cost (Costing Sheet) broken down by package. Third Party, OEM, Hardware, Software, Office Infrastructure and Site Visit costs remain single proposal-level entries and are not split by package.</div>
+    <div class="tablewrap" style="max-height:none;">
+      <table class="data" id="summaryPkgTable">
+        <thead><tr><th>Package</th><th style="width:150px;">Estimated MHs</th><th style="width:180px;">MHs Cost</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td>Total MHs Cost (All Packages)</td><td class="calc" id="summaryPkgMhsTotal">0</td><td class="calc" id="summaryPkgCostTotal">$0</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Cost Summary</h2>
+    <div class="desc">Figures below are confidential and masked by default. Tick "Unmask confidential figures" on the Input Sheet (password required) to reveal them. Values are computed in USD and labelled in the selected Currency (Input Sheet) as a display convenience &mdash; no exchange-rate conversion is applied.</div>
+    <div class="tablewrap" style="max-height:none;">
+      <table class="data" id="summaryTable">
+        <thead><tr><th>Cost Head</th><th style="width:120px;">Source Sheet</th><th style="width:180px;">Cost</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="2">Original Cost (Total)</td><td class="calc" id="summaryOriginal">$0</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bidding Price</h2>
+    <div class="grid cols-3">
+      <div class="field"><label>Original Cost</label><div class="kpi" style="min-width:0;"><div class="value" id="bidOriginal">$0</div></div></div>
+      <div class="field"><label>Rationalization / Reduction Factor (%)</label><input type="number" class="input-yellow" id="in_reduction" value="0" min="0" max="100" step="0.1"></div>
+      <div class="field"><label>Final Cost for Bidding</label><div class="kpi final" style="min-width:0;"><div class="value" id="bidFinal">$0</div></div></div>
+    </div>
+    <div class="footnote">Final Cost = Original Cost &times; (100 &minus; Reduction Factor) / 100</div>
+  </div>
+</section>
+
+</main>
+
+<div id="pwModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(10,20,30,.55);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;padding:24px 26px;max-width:340px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+    <h3 style="margin:0 0 6px;color:var(--navy);font-size:15px;">Unmask Confidential Figures</h3>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted);">Enter the password to reveal Rate (USD/MH) and Final Cost values.</p>
+    <input type="password" id="pwInput" class="input-yellow" style="margin-bottom:10px;" placeholder="Password" autocomplete="off">
+    <div id="pwError" style="color:var(--warn);font-size:12px;margin-bottom:10px;display:none;">Incorrect password. Please try again.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn ghost" id="pwCancelBtn" style="color:var(--navy);">Cancel</button>
+      <button class="btn primary" id="pwOkBtn">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="pwChangeModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(10,20,30,.55);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;padding:24px 26px;max-width:360px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+    <h3 style="margin:0 0 6px;color:var(--navy);font-size:15px;">Change Unmask Password</h3>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted);">Enter your current password or the Master password to authorize this change, then set a new password.</p>
+    <input type="password" id="pwChangeOldInput" class="input-yellow" style="margin-bottom:10px;" placeholder="Current or Master password" autocomplete="off">
+    <input type="password" id="pwChangeNewInput" class="input-yellow" style="margin-bottom:10px;" placeholder="New password (min. 4 characters)" autocomplete="off">
+    <input type="password" id="pwChangeConfirmInput" class="input-yellow" style="margin-bottom:10px;" placeholder="Confirm new password" autocomplete="off">
+    <div id="pwChangeError" style="color:var(--warn);font-size:12px;margin-bottom:10px;display:none;"></div>
+    <div id="pwChangeSuccess" style="color:#1a7a3c;font-size:12px;margin-bottom:10px;display:none;">Password updated successfully.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn ghost" id="pwChangeCancelBtn" style="color:var(--navy);">Cancel</button>
+      <button class="btn primary" id="pwChangeOkBtn">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  This application is designed and programmed by Bharat Shukla (B560) for EIL internal use only. Commercialisation is strictly prohibited.
+</footer>
+
+<script>
+/* ===================== DATA MODEL ===================== */
+const DISCIPLINES = [
+"Project Manager","Engineering Manager","Project / Engineering Co-ordinator","Interface Manager",
+"Project Planning & Control Manager","Costing Engineer","Economist","SCM (Contract)","HSE Engineer",
+"QA/QC Engineer","Process Engineer","R&D Engineer","Heat Transfer Engineer","Mass Transfer Engineer",
+"General Civil Engineer","Architecture Engineer","Piping Engineer","Pipeline Engineer","ETDD Engineer",
+"Rotating Engineer","Packaged Engineer","Static Equipment Engineer","Mass Transfer & Mechanical System Engineer",
+"Material & Corrosion Engineer","Digital Engineer","Offshore Structural Engineer","Onshore Structural Engineer",
+"Geotechnical Engineer","Electrical Engineer","Telecom Engineer","I&C Engineer","Energy Engineer",
+"Environment & Water Engineer","Process Designer","Piping Designer","Pipeline Designer","Offshore Designer",
+"Civil Designer","Onshore Structural Designer","Electrical Designer","I&C Designer","Telecom Designer",
+"Architecture Designer","HSE Designer","3D Modelling Administrator","P&ID Modeler","Piping 3D Modeller",
+"Structure 3D Modeller","Elec. 3D Modeller","I&C 3D Modeller","Document Controller"
+];
+// 0-based indices matching spec (i=0 ... li=50)
+const GROUP_DEFS = [
+  {name:"Project Management Team", idx:[0,1,2,3,4,9]},
+  {name:"Process & Engineering Team", idx:range(10,32)},
+  {name:"Draftsman, Designer & Modeller", idx:range(33,49)},
+  {name:"Commercial Team", idx:[5,6,7]},
+  {name:"Document Controller", idx:[50]}
+];
+function range(a,b){const r=[];for(let i=a;i<=b;i++)r.push(i);return r;}
+
+const LEVELS = [10,11,12,13,14,15,16,17,18];
+const OUT_CATS = [
+  {key:"manager",label:"Manager"},
+  {key:"leadEngineer",label:"Lead Engineer"},
+  {key:"engineer",label:"Engineer"},
+  {key:"designer",label:"Designer"}
+];
+const PAYMENT_ITEMS = [
+  {key:"manhours",label:"Manhours"},
+  {key:"thirdParty",label:"Third Party Services"},
+  {key:"oem",label:"OEM Services"},
+  {key:"hardware",label:"Hardware Cost"},
+  {key:"software",label:"Software Cost"},
+  {key:"office",label:"Office Infrastructure"}
+];
+
+const SECTOR_OPTIONS = ["Oil & Gas","Non-Oil & Gas"];
+const NATURE_OG = ["Offshore","Onshore","Refinery","Petrochemical","Pipeline","Others"];
+const NATURE_NONOG = ["Infrastructure","Ports","Non-ferrous","Others"];
+const PROJECT_PHASES = ["ASSESS/FR/DFR","Concept SELECT","Concept Design","FEED","Detail Engineering","EPCM","PMC"];
+const APP_STANDARDS = ["EIL Specs","AGPS/AGES","KOC Std./Spec.","ARAMCO Std./spec.","SHELL DEPs","Others"];
+const PROJECT_LOCATIONS = ["INDIA","UAE","SAUDI","NIGERIA","RUSSIA","INDONESIA","KUWAIT","OMAN","MONGOLIA","OTHERS"];
+const CLIENT_TYPES = ["DOMESTIC","INTERNATIONAL","OTHERS"];
+const CLIENT_DOMESTIC = ["IOCL","BPCL","HPCL","ONGC","HMEL","HRRL","GAIL","ABRPL","CBR","NRL","NTPC","NAYARA","MRPL","OTHERS"];
+const CLIENT_INTERNATIONAL = ["ADNOC OFFSHORE","ADNOC ONSHORE","ADNOC HQ","ADNOC GAS","ADNOC REFINING","ADNOC SOUR GAS","ADNOC BOROUGE","ADOC","WAFRA JOINT OPERATION (WJO)","SAUDI ARAMCO","OMAN REFINING & PETROCHEMICAL INDUSTRY CORPORATION (ORPIC)","QATAR PETROLEUM","DANGOTE","STANCH","GUYANA","SONATRACH","BAPCO","OTHERS"];
+const CURRENCY_OPTIONS = ["INR","AED","USD","KWD","SAR","Others"];
+
+let S = {
+  proposalPrefix:"IA", proposalNo:"",
+  projName:"", schedule:12, K:160,
+  numPackages:1, packages:[{name:"",schedule:12,progressCurFY:null,progressNextFY:null}],
+  sector:"", natureOfProject:"", natureOfProjectOther:"",
+  projectPhase:"",
+  appStandard:"", appStandardOther:"",
+  projectLocation:"", projectLocationOther:"",
+  clientType:"", clientName:"", clientNameOther:"",
+  currency:"USD", currencyOther:"",
+  payment:{manhours:"L",thirdParty:"L",oem:"L",hardware:"L",software:"L",office:"L"},
+  homePct:60, adPct:40, homeRegular:70, adRegular:80,
+  levelPct:{10:0,11:0,12:5,13:0,14:7,15:8,16:80,17:0,18:0},
+  levelRate:{10:0,11:0,12:0,13:0,14:0,15:0,16:0,17:0,18:0},
+  outPct:{manager:25,leadEngineer:9,engineer:33,designer:33},
+  outRate:{manager:0,leadEngineer:0,engineer:0,designer:0},
+  mhs: DISCIPLINES.map(()=>({pkg:[{d1:0,d2:0}]})),
+  tp:[{desc:"",cost:0}], oem:[{desc:"",cost:0}],
+  sv:[{disc:"",m:0,v:0,d:0}], visitRate:0,
+  hw:[{desc:"",cost:0}], sw:[{desc:"",cost:0}], of:[{desc:"",cost:0}],
+  reduction:0
+};
+
+/* ===================== TAB NAV ===================== */
+document.getElementById('tabs').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-sheet]'); if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sheet-'+btn.dataset.sheet).classList.add('active');
+});
+
+/* ===================== PROJECT META (Sector/Nature/Phase/Standard/Location/Client/Currency) ===================== */
+function fillSelect(sel, options, placeholder){
+  sel.innerHTML = (placeholder!==null && placeholder!==undefined ? `<option value="">${placeholder}</option>` : '') +
+    options.map(o=>`<option value="${o.replace(/"/g,'&quot;')}">${o}</option>`).join('');
+}
+function rebuildNatureOptions(){
+  const sel = document.getElementById('in_nature');
+  const opts = S.sector==="Oil & Gas" ? NATURE_OG : (S.sector==="Non-Oil & Gas" ? NATURE_NONOG : null);
+  if(opts){ fillSelect(sel, opts, '-- Select --'); sel.disabled=false; sel.value = opts.includes(S.natureOfProject)?S.natureOfProject:""; }
+  else{ sel.innerHTML='<option value="">-- Select Sector first --</option>'; sel.disabled=true; sel.value=""; }
+  S.natureOfProject = sel.value;
+  syncNatureOtherField();
+}
+function syncNatureOtherField(){
+  const sel = document.getElementById('in_nature');
+  const other = document.getElementById('in_natureOther');
+  const isOther = sel.value==="Others";
+  other.style.display = isOther?'':'none'; other.disabled=!isOther;
+  other.value = isOther ? (S.natureOfProjectOther||'') : '';
+  if(!isOther) S.natureOfProjectOther='';
+}
+function syncStdOtherField(){
+  const sel = document.getElementById('in_appStd');
+  const other = document.getElementById('in_appStdOther');
+  const isOther = sel.value==="Others";
+  other.style.display = isOther?'':'none'; other.disabled=!isOther;
+  other.value = isOther ? (S.appStandardOther||'') : '';
+  if(!isOther) S.appStandardOther='';
+}
+function syncLocOtherField(){
+  const sel = document.getElementById('in_location');
+  const other = document.getElementById('in_locationOther');
+  const isOther = sel.value==="OTHERS";
+  other.style.display = isOther?'':'none'; other.disabled=!isOther;
+  other.value = isOther ? (S.projectLocationOther||'') : '';
+  if(!isOther) S.projectLocationOther='';
+}
+function rebuildClientNameField(){
+  const typeSel = document.getElementById('in_clientType');
+  const nameSel = document.getElementById('in_clientName');
+  const nameFreeform = document.getElementById('in_clientNameFreeform');
+  const t = typeSel.value;
+  if(t==='DOMESTIC' || t==='INTERNATIONAL'){
+    const opts = t==='DOMESTIC' ? CLIENT_DOMESTIC : CLIENT_INTERNATIONAL;
+    nameSel.style.display=''; nameFreeform.style.display='none';
+    fillSelect(nameSel, opts, '-- Select --');
+    nameSel.value = opts.includes(S.clientName)?S.clientName:"";
+    S.clientName = nameSel.value;
+  } else if(t==='OTHERS'){
+    nameSel.style.display='none'; nameFreeform.style.display='';
+    nameFreeform.value = S.clientName||"";
+  } else {
+    nameSel.style.display=''; nameFreeform.style.display='none';
+    nameSel.innerHTML='<option value="">-- Select Client Type first --</option>';
+    S.clientName="";
+  }
+  syncClientNameOtherField();
+}
+function syncClientNameOtherField(){
+  const nameSel = document.getElementById('in_clientName');
+  const other = document.getElementById('in_clientNameOther');
+  const isOther = (nameSel.style.display!=='none') && nameSel.value==='OTHERS';
+  other.style.display = isOther?'':'none'; other.disabled=!isOther;
+  other.value = isOther ? (S.clientNameOther||'') : '';
+  if(!isOther) S.clientNameOther='';
+}
+function syncCurrencyOtherField(){
+  const sel = document.getElementById('in_currency');
+  const other = document.getElementById('in_currencyOther');
+  const isOther = sel.value==="Others";
+  other.style.display = isOther?'':'none'; other.disabled=!isOther;
+  other.value = isOther ? (S.currencyOther||'') : '';
+  if(!isOther) S.currencyOther='';
+}
+
+/* ===================== PACKAGES ===================== */
+function buildNumPackagesOptions(){
+  const sel = document.getElementById('in_numPackages');
+  sel.innerHTML="";
+  for(let i=1;i<=20;i++){
+    const o=document.createElement('option'); o.value=i; o.textContent=i;
+    sel.appendChild(o);
+  }
+  sel.value = S.numPackages;
+}
+function resizePackagesArray(n){
+  while(S.packages.length < n) S.packages.push({name:"", schedule:S.schedule, progressCurFY:null, progressNextFY:null});
+  if(S.packages.length > n) S.packages.length = n;
+  DISCIPLINES.forEach((name,i)=>{
+    const pkgArr = S.mhs[i].pkg;
+    while(pkgArr.length < n) pkgArr.push({d1:0,d2:0});
+    if(pkgArr.length > n) pkgArr.length = n;
+  });
+}
+function buildPackagesUI(){
+  const card = document.getElementById('packageDetailsCard');
+  const schedFld = document.getElementById('fld_schedule');
+  const progSingleFld = document.getElementById('fld_progressSingle');
+  const n = S.numPackages;
+  schedFld.style.display=''; // Overall Project Schedule is always shown - drives consolidated deployment
+  if(n<=1){
+    card.style.display='none';
+    progSingleFld.style.display='';
+    const pkg = S.packages[0] || (S.packages[0]={name:"",schedule:S.schedule,progressCurFY:null,progressNextFY:null});
+    const curEl = document.getElementById('in_progCurSingle');
+    const nextEl = document.getElementById('in_progNextSingle');
+    curEl.value = pkg.progressCurFY===null||pkg.progressCurFY===undefined ? "" : pkg.progressCurFY;
+    nextEl.value = pkg.progressNextFY===null||pkg.progressNextFY===undefined ? "" : pkg.progressNextFY;
+    updateProgressSumHint(document.getElementById('progSumHintSingle'), pkg.progressCurFY, pkg.progressNextFY);
+    return;
+  }
+  card.style.display='';
+  progSingleFld.style.display='none';
+  const tbody = document.querySelector('#packagesTable tbody'); tbody.innerHTML="";
+  for(let p=0;p<n;p++){
+    const pkg = S.packages[p];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rownum">${p+1}</td>
+      <td><input type="text" class="cell-input text" data-pkgname="${p}" value="${(pkg.name||"").replace(/"/g,'&quot;')}" placeholder="e.g. Package ${p+1} Name"></td>
+      <td><select class="cell-input" data-pkgsched="${p}"></select></td>
+      <td><input type="number" class="cell-input" data-pkgprogcur="${p}" min="0" max="100" placeholder="Current FY %" value="${pkg.progressCurFY===null||pkg.progressCurFY===undefined ? "" : pkg.progressCurFY}"></td>
+      <td><input type="number" class="cell-input" data-pkgprognext="${p}" min="0" max="100" placeholder="Next FY %" value="${pkg.progressNextFY===null||pkg.progressNextFY===undefined ? "" : pkg.progressNextFY}">
+          <div class="hint" data-progsumhint="${p}" style="margin:2px 0 0;"></div></td>`;
+    tbody.appendChild(tr);
+    const schedSel = tr.querySelector('select[data-pkgsched]');
+    for(let m=1;m<=64;m++){
+      const o=document.createElement('option'); o.value=m; o.textContent=m+(m===1?" month":" months");
+      schedSel.appendChild(o);
+    }
+    schedSel.value = pkg.schedule||S.schedule;
+    updateProgressSumHint(tr.querySelector('[data-progsumhint]'), pkg.progressCurFY, pkg.progressNextFY);
+  }
+}
+function updateProgressSumHint(el, curVal, nextVal){
+  if(!el) return;
+  const hasCur = curVal!==null && curVal!==undefined && curVal!=="";
+  const hasNext = nextVal!==null && nextVal!==undefined && nextVal!=="";
+  if(!hasCur && !hasNext){ el.textContent=""; el.style.color=""; return; }
+  const sum = (parseFloat(curVal)||0) + (parseFloat(nextVal)||0);
+  if(sum===100){ el.textContent="Sum: 100% \u2713"; el.style.color="var(--green,#1e824c)"; }
+  else{ el.textContent="Sum: "+sum+"% (should total 100%)"; el.style.color="var(--red,#c0392b)"; }
+}
+function packageLabel(p){
+  const pkg = S.packages[p];
+  return pkg && pkg.name ? pkg.name : ("Package "+(p+1));
+}
+function packageSchedule(p){
+  if(S.numPackages<=1) return S.schedule;
+  return (S.packages[p] && S.packages[p].schedule) ? S.packages[p].schedule : S.schedule;
+}
+function bindPackagesUI(){
+  document.getElementById('in_numPackages').addEventListener('change', e=>{
+    S.numPackages = parseInt(e.target.value)||1;
+    resizePackagesArray(S.numPackages);
+    buildPackagesUI();
+    buildMhsTable();
+    buildDeploymentTabs();
+    buildCalcPackageBlocks();
+    recalcAll();
+  });
+  document.getElementById('packagesTable').addEventListener('input', e=>{
+    const t=e.target;
+    if(t.dataset.pkgname!==undefined){ S.packages[t.dataset.pkgname].name = t.value; updatePackageLabelsEverywhere(); }
+    if(t.dataset.pkgsched!==undefined){ S.packages[t.dataset.pkgsched].schedule = parseInt(t.value)||1; recalcAll(); }
+    if(t.dataset.pkgprogcur!==undefined || t.dataset.pkgprognext!==undefined){
+      const p = t.dataset.pkgprogcur!==undefined ? t.dataset.pkgprogcur : t.dataset.pkgprognext;
+      const pkg = S.packages[p];
+      if(t.dataset.pkgprogcur!==undefined) pkg.progressCurFY = t.value===""? null : parseFloat(t.value);
+      if(t.dataset.pkgprognext!==undefined) pkg.progressNextFY = t.value===""? null : parseFloat(t.value);
+      const hintEl = t.closest('tr').querySelector('[data-progsumhint="'+p+'"]');
+      updateProgressSumHint(hintEl, pkg.progressCurFY, pkg.progressNextFY);
+    }
+  });
+  document.getElementById('in_progCurSingle').addEventListener('input', e=>{
+    const pkg = S.packages[0] || (S.packages[0]={name:"",schedule:S.schedule,progressCurFY:null,progressNextFY:null});
+    pkg.progressCurFY = e.target.value===""? null : parseFloat(e.target.value);
+    updateProgressSumHint(document.getElementById('progSumHintSingle'), pkg.progressCurFY, pkg.progressNextFY);
+  });
+  document.getElementById('in_progNextSingle').addEventListener('input', e=>{
+    const pkg = S.packages[0] || (S.packages[0]={name:"",schedule:S.schedule,progressCurFY:null,progressNextFY:null});
+    pkg.progressNextFY = e.target.value===""? null : parseFloat(e.target.value);
+    updateProgressSumHint(document.getElementById('progSumHintSingle'), pkg.progressCurFY, pkg.progressNextFY);
+  });
+}
+function updatePackageLabelsEverywhere(){
+  buildMhsTable();
+  buildDeploymentTabs();
+  buildCalcPackageBlocks();
+  recalcAll();
+}
+function populateProjectMetaUI(){
+  document.getElementById('in_proposalPrefix').value = S.proposalPrefix||"IA";
+  document.getElementById('in_proposalNo').value = S.proposalNo||"";
+  updateProjTitle();
+  buildNumPackagesOptions();
+  buildPackagesUI();
+  document.getElementById('in_sector').value = S.sector||"";
+  rebuildNatureOptions();
+  document.getElementById('in_phase').value = S.projectPhase||"";
+  document.getElementById('in_appStd').value = S.appStandard||""; syncStdOtherField();
+  document.getElementById('in_location').value = S.projectLocation||""; syncLocOtherField();
+  document.getElementById('in_clientType').value = S.clientType||"";
+  rebuildClientNameField();
+  document.getElementById('in_currency').value = S.currency||"USD"; syncCurrencyOtherField();
+}
+function bindProjectMetaEvents(){
+  document.getElementById('in_proposalPrefix').addEventListener('change', e=>{ S.proposalPrefix=e.target.value; updateProjTitle(); });
+  document.getElementById('in_proposalNo').addEventListener('input', e=>{
+    const digits = e.target.value.replace(/[^0-9]/g,'').slice(0,4);
+    e.target.value = digits;
+    S.proposalNo = digits;
+    updateProjTitle();
+  });
+  fillSelect(document.getElementById('in_sector'), SECTOR_OPTIONS, '-- Select --');
+  fillSelect(document.getElementById('in_phase'), PROJECT_PHASES, '-- Select --');
+  fillSelect(document.getElementById('in_appStd'), APP_STANDARDS, '-- Select --');
+  fillSelect(document.getElementById('in_location'), PROJECT_LOCATIONS, '-- Select --');
+  fillSelect(document.getElementById('in_clientType'), CLIENT_TYPES, '-- Select --');
+  fillSelect(document.getElementById('in_currency'), CURRENCY_OPTIONS, null);
+
+  document.getElementById('in_sector').addEventListener('change', e=>{ S.sector=e.target.value; S.natureOfProject=""; rebuildNatureOptions(); });
+  document.getElementById('in_nature').addEventListener('change', e=>{ S.natureOfProject=e.target.value; syncNatureOtherField(); });
+  document.getElementById('in_natureOther').addEventListener('input', e=>{ S.natureOfProjectOther=e.target.value; });
+
+  document.getElementById('in_phase').addEventListener('change', e=>{ S.projectPhase=e.target.value; });
+
+  document.getElementById('in_appStd').addEventListener('change', e=>{ S.appStandard=e.target.value; syncStdOtherField(); });
+  document.getElementById('in_appStdOther').addEventListener('input', e=>{ S.appStandardOther=e.target.value; });
+
+  document.getElementById('in_location').addEventListener('change', e=>{ S.projectLocation=e.target.value; syncLocOtherField(); });
+  document.getElementById('in_locationOther').addEventListener('input', e=>{ S.projectLocationOther=e.target.value; });
+
+  document.getElementById('in_clientType').addEventListener('change', e=>{ S.clientType=e.target.value; S.clientName=""; rebuildClientNameField(); });
+  document.getElementById('in_clientName').addEventListener('change', e=>{ S.clientName=e.target.value; syncClientNameOtherField(); });
+  document.getElementById('in_clientNameFreeform').addEventListener('input', e=>{ S.clientName=e.target.value; });
+  document.getElementById('in_clientNameOther').addEventListener('input', e=>{ S.clientNameOther=e.target.value; });
+
+  document.getElementById('in_currency').addEventListener('change', e=>{ S.currency=e.target.value; syncCurrencyOtherField(); recalcAll(); });
+  document.getElementById('in_currencyOther').addEventListener('input', e=>{ S.currencyOther=e.target.value; recalcAll(); });
+
+  populateProjectMetaUI();
+}
+function resolveProposalNo(){ return (S.proposalPrefix||"") + (S.proposalNo ? ("-"+S.proposalNo) : ""); }
+function updateProjTitle(){
+  const propNo = resolveProposalNo();
+  const name = S.projName||"";
+  let title;
+  if(propNo && S.proposalNo && name) title = propNo + ": " + name;
+  else if(propNo && S.proposalNo) title = propNo;
+  else if(name) title = name;
+  else title = "Proposal Input Template";
+  document.getElementById('projTitle').textContent = title;
+}
+function resolveNature(){ return S.natureOfProject==='Others' ? (S.natureOfProjectOther||'Others') : S.natureOfProject; }
+function resolveAppStd(){ return S.appStandard==='Others' ? (S.appStandardOther||'Others') : S.appStandard; }
+function resolveLocation(){ return S.projectLocation==='OTHERS' ? (S.projectLocationOther||'OTHERS') : S.projectLocation; }
+function resolveClientName(){
+  if(S.clientType==='OTHERS') return S.clientName;
+  return S.clientName==='OTHERS' ? (S.clientNameOther||'OTHERS') : S.clientName;
+}
+function curCode(){ return S.currency==='Others' ? (S.currencyOther||'CUR') : (S.currency||'USD'); }
+
+/* ===================== CONFIDENTIAL MASKING (Rate & Final Cost) ===================== */
+const CONF_MASTER_PASSWORD = "shukla";        // Master password - always valid, cannot be changed
+const CONF_DEFAULT_PASSWORD = "bharat";       // Default secondary/changeable password
+const CONF_PW_KEY = 'eil_ad_conf_password_v1';
+let CONF_CURRENT_PASSWORD = (function(){
+  try{ return localStorage.getItem(CONF_PW_KEY) || CONF_DEFAULT_PASSWORD; }
+  catch(e){ return CONF_DEFAULT_PASSWORD; }
+})();
+const MASK_STR = "\u2022\u2022\u2022\u2022\u2022\u2022";
+let CONF_UNMASKED = false;
+function fmtCur(n){ if(!isFinite(n)) n=0; return curCode()+" "+Number(n).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function confUSD(v){ return CONF_UNMASKED ? fmtUSD(v) : MASK_STR; }
+function confCur(v){ return CONF_UNMASKED ? fmtCur(v) : MASK_STR; }
+function applyMaskingToInputs(){
+  document.querySelectorAll('#levelBreakupTable input[data-lvl-rate]').forEach(inp=>{
+    if(CONF_UNMASKED){ inp.type='number'; inp.disabled=false; inp.value = S.levelRate[inp.dataset.lvlRate]; }
+    else{ inp.type='text'; inp.value = MASK_STR; inp.disabled=true; }
+  });
+  document.querySelectorAll('#outsourcedBreakupTable input[data-out-rate]').forEach(inp=>{
+    if(CONF_UNMASKED){ inp.type='number'; inp.disabled=false; inp.value = S.outRate[inp.dataset.outRate]; }
+    else{ inp.type='text'; inp.value = MASK_STR; inp.disabled=true; }
+  });
+  const chk = document.getElementById('unmaskChk'); if(chk) chk.checked = CONF_UNMASKED;
+  const lbl = document.getElementById('maskStatusLabel');
+  if(lbl) lbl.textContent = CONF_UNMASKED ? "Confidential figures are visible for this session." : "Confidential figures are masked and locked.";
+  const cpBtn = document.getElementById('changePwBtn');
+  if(cpBtn) cpBtn.style.display = CONF_UNMASKED ? "inline-block" : "none";
+}
+function openPwModal(){
+  document.getElementById('pwInput').value="";
+  document.getElementById('pwError').style.display="none";
+  document.getElementById('pwModalOverlay').style.display="flex";
+  document.getElementById('pwInput').focus();
+}
+function closePwModal(){ document.getElementById('pwModalOverlay').style.display="none"; }
+function attemptUnmask(){
+  const val = document.getElementById('pwInput').value;
+  if(val === CONF_MASTER_PASSWORD || val === CONF_CURRENT_PASSWORD){
+    CONF_UNMASKED = true;
+    closePwModal();
+    applyMaskingToInputs();
+    recalcAll();
+  } else {
+    document.getElementById('pwError').style.display="block";
+  }
+}
+function openPwChangeModal(){
+  document.getElementById('pwChangeOldInput').value="";
+  document.getElementById('pwChangeNewInput').value="";
+  document.getElementById('pwChangeConfirmInput').value="";
+  document.getElementById('pwChangeError').style.display="none";
+  document.getElementById('pwChangeSuccess').style.display="none";
+  document.getElementById('pwChangeModalOverlay').style.display="flex";
+  document.getElementById('pwChangeOldInput').focus();
+}
+function closePwChangeModal(){ document.getElementById('pwChangeModalOverlay').style.display="none"; }
+function attemptChangePassword(){
+  const oldVal = document.getElementById('pwChangeOldInput').value;
+  const newVal = document.getElementById('pwChangeNewInput').value;
+  const confirmVal = document.getElementById('pwChangeConfirmInput').value;
+  const errEl = document.getElementById('pwChangeError');
+  const okEl = document.getElementById('pwChangeSuccess');
+  errEl.style.display="none"; okEl.style.display="none";
+
+  if(oldVal !== CONF_MASTER_PASSWORD && oldVal !== CONF_CURRENT_PASSWORD){
+    errEl.textContent = "Current password or Master password is incorrect.";
+    errEl.style.display="block";
+    return;
+  }
+  if(!newVal || newVal.length < 4){
+    errEl.textContent = "New password must be at least 4 characters long.";
+    errEl.style.display="block";
+    return;
+  }
+  if(newVal === CONF_MASTER_PASSWORD){
+    errEl.textContent = "New password cannot be the same as the Master password.";
+    errEl.style.display="block";
+    return;
+  }
+  if(newVal !== confirmVal){
+    errEl.textContent = "New password and confirmation do not match.";
+    errEl.style.display="block";
+    return;
+  }
+  CONF_CURRENT_PASSWORD = newVal;
+  try{ localStorage.setItem(CONF_PW_KEY, newVal); }catch(e){ /* ignore storage errors */ }
+  okEl.style.display="block";
+  document.getElementById('pwChangeOldInput').value="";
+  document.getElementById('pwChangeNewInput').value="";
+  document.getElementById('pwChangeConfirmInput').value="";
+  setTimeout(closePwChangeModal, 1200);
+}
+function bindMaskingUI(){
+  document.getElementById('unmaskChk').addEventListener('change', e=>{
+    if(e.target.checked){ openPwModal(); }
+    else{ CONF_UNMASKED=false; applyMaskingToInputs(); recalcAll(); }
+  });
+  document.getElementById('pwCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('unmaskChk').checked=false;
+    closePwModal();
+  });
+  document.getElementById('pwOkBtn').addEventListener('click', attemptUnmask);
+  document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); attemptUnmask(); } });
+
+  document.getElementById('changePwBtn').addEventListener('click', openPwChangeModal);
+  document.getElementById('pwChangeCancelBtn').addEventListener('click', closePwChangeModal);
+  document.getElementById('pwChangeOkBtn').addEventListener('click', attemptChangePassword);
+  document.getElementById('pwChangeConfirmInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); attemptChangePassword(); } });
+}
+
+/* ===================== BUILD STATIC PARTS ===================== */
+function buildScheduleOptions(){
+  const sel = document.getElementById('in_schedule');
+  sel.innerHTML="";
+  for(let i=1;i<=64;i++){
+    const o=document.createElement('option'); o.value=i; o.textContent=i+ (i===1?" month":" months");
+    sel.appendChild(o);
+  }
+  sel.value = S.schedule;
+}
+function buildPaymentPlan(){
+  const tbody = document.querySelector('#paymentPlanTable tbody'); tbody.innerHTML="";
+  PAYMENT_ITEMS.forEach(item=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${item.label}</td><td></td>`;
+    const sel=document.createElement('select'); sel.className='input-yellow';
+    sel.innerHTML = `<option value="L">Lumpsum (L)</option><option value="R">Reimbursable (R)</option>`;
+    sel.value = S.payment[item.key];
+    sel.addEventListener('change',()=>{S.payment[item.key]=sel.value;});
+    tr.children[1].appendChild(sel);
+    tbody.appendChild(tr);
+  });
+}
+function buildLevelTables(){
+  const rtbody = document.querySelector('#levelBreakupTable tbody'); rtbody.innerHTML="";
+  LEVELS.forEach(lv=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="lvl-label">Level ${lv}</td>
+      <td><input type="number" class="cell-input" data-lvl-pct="${lv}" value="${S.levelPct[lv]}" min="0" max="100"></td>
+      <td><input type="number" class="cell-input" data-lvl-rate="${lv}" value="${S.levelRate[lv]}" min="0"></td>
+      <td class="calc" id="lvlCost_${lv}">$0</td>`;
+    rtbody.appendChild(tr);
+  });
+  const otbody = document.querySelector('#outsourcedBreakupTable tbody'); otbody.innerHTML="";
+  OUT_CATS.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="lvl-label">${c.label}</td>
+      <td><input type="number" class="cell-input" data-out-pct="${c.key}" value="${S.outPct[c.key]}" min="0" max="100"></td>
+      <td><input type="number" class="cell-input" data-out-rate="${c.key}" value="${S.outRate[c.key]}" min="0"></td>
+      <td class="calc" id="outCost_${c.key}">$0</td>`;
+    otbody.appendChild(tr);
+  });
+  applyMaskingToInputs();
+}
+function buildMhsTable(){
+  const n = S.numPackages;
+  const thead = document.getElementById('mhsThead');
+  const tfoot = document.getElementById('mhsTfoot');
+  const tbody = document.querySelector('#mhsTable tbody');
+  tbody.innerHTML=""; thead.innerHTML=""; tfoot.innerHTML="";
+
+  if(n<=1){
+    thead.innerHTML = `<tr>
+      <th class="rownum">#</th><th class="mhs-frozen-col">Discipline</th>
+      <th style="width:130px;">MHs by Discipline</th>
+      <th style="width:150px;">Assumed MHs by PC</th>
+      <th style="width:120px;">Estimated MHs</th>
+      <th style="width:110px;">Man-Month (MM)</th>
+    </tr>`;
+    tfoot.innerHTML = `<tr><td class="mhs-frozen-col" colspan="2">Sum</td><td class="calc" id="mhsSum1_0">0</td><td class="calc" id="mhsSum2_0">0</td><td class="calc" id="mhsSum3_0">0</td><td class="calc" id="mhsSum4_0">0</td></tr>`;
+  } else {
+    let row1 = `<tr><th class="rownum" rowspan="2">#</th><th class="mhs-frozen-col" rowspan="2">Discipline</th>`;
+    let row2 = `<tr>`;
+    for(let p=0;p<n;p++){
+      row1 += `<th colspan="4">${packageLabel(p)}</th>`;
+      row2 += `<th style="width:110px;">MHs by Disc.</th><th style="width:120px;">Assumed by PC</th><th style="width:110px;">Est. MHs</th><th style="width:95px;">MM</th>`;
+    }
+    row1 += `<th colspan="2" style="background:#0a2338;">Consolidated (All Packages)</th></tr>`;
+    row2 += `<th style="width:110px;">Est. MHs</th><th style="width:95px;">MM</th></tr>`;
+    thead.innerHTML = row1+row2;
+
+    let footRow = `<tr><td class="mhs-frozen-col" colspan="2">Sum</td>`;
+    for(let p=0;p<n;p++){
+      footRow += `<td class="calc" id="mhsSum1_${p}">0</td><td class="calc" id="mhsSum2_${p}">0</td><td class="calc" id="mhsSum3_${p}">0</td><td class="calc" id="mhsSum4_${p}">0</td>`;
+    }
+    footRow += `<td class="calc" id="mhsSum3C">0</td><td class="calc" id="mhsSum4C">0</td></tr>`;
+    tfoot.innerHTML = footRow;
+  }
+
+  DISCIPLINES.forEach((name,i)=>{
+    const tr=document.createElement('tr');
+    let html = `<td class="rownum">${i+1}</td><td class="mhs-frozen-col">${name}</td>`;
+    for(let p=0;p<n;p++){
+      const pkgVal = S.mhs[i].pkg[p] || {d1:0,d2:0};
+      html += `<td><input type="number" class="cell-input" data-mhs1="${i}" data-pkg="${p}" value="${pkgVal.d1}" min="0"></td>
+        <td><input type="number" class="cell-input pc" data-mhs2="${i}" data-pkg="${p}" value="${pkgVal.d2}" min="0"></td>
+        <td class="calc" id="mhsEst_${i}_${p}">0</td>
+        <td class="calc" id="mhsMM_${i}_${p}">0</td>`;
+    }
+    if(n>1){
+      html += `<td class="calc" id="mhsEstC_${i}">0</td><td class="calc" id="mhsMMC_${i}">0</td>`;
+    }
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+}
+function buildDynTable(tbodyId, rowsArr, cols, addable){
+  const tbody = document.getElementById(tbodyId); tbody.innerHTML="";
+  rowsArr.forEach((row,i)=>{
+    const tr=document.createElement('tr'); tr.dataset.idx=i;
+    let html = `<td class="rownum">${i+1}</td>`;
+    cols.forEach(col=>{
+      if(col.type==='text'){
+        html += `<td><input type="text" class="cell-input text" data-field="${col.key}" value="${(row[col.key]||"").toString().replace(/"/g,'&quot;')}"></td>`;
+      } else {
+        html += `<td><input type="number" class="cell-input" data-field="${col.key}" value="${row[col.key]||0}" min="0"></td>`;
+      }
+    });
+    html += `<td class="calc" data-out="${i}"></td>`;
+    if(addable) html += `<td><button class="btn ghost small" data-del="${i}">&times;</button></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ===================== INPUT SHEET LOGIC ===================== */
+function bindInputSheet(){
+  document.getElementById('in_projName').addEventListener('input',e=>{S.projName=e.target.value; updateProjTitle();});
+  document.getElementById('in_schedule').addEventListener('change',e=>{S.schedule=parseInt(e.target.value); recalcAll();});
+  document.getElementById('in_K').addEventListener('input',e=>{S.K=parseFloat(e.target.value)||1; recalcAll();});
+  document.getElementById('in_homePct').addEventListener('input',e=>{S.homePct=parseFloat(e.target.value)||0; recalcAll();});
+  document.getElementById('in_adPct').addEventListener('input',e=>{S.adPct=parseFloat(e.target.value)||0; recalcAll();});
+  document.getElementById('in_homeRegular').addEventListener('input',e=>{S.homeRegular=parseFloat(e.target.value)||0; recalcAll();});
+  document.getElementById('in_adRegular').addEventListener('input',e=>{S.adRegular=parseFloat(e.target.value)||0; recalcAll();});
+
+  document.getElementById('levelBreakupTable').addEventListener('input',e=>{
+    const t=e.target;
+    if(t.dataset.lvlPct){S.levelPct[t.dataset.lvlPct]=parseFloat(t.value)||0;}
+    if(t.dataset.lvlRate){S.levelRate[t.dataset.lvlRate]=parseFloat(t.value)||0;}
+    recalcAll();
+  });
+  document.getElementById('outsourcedBreakupTable').addEventListener('input',e=>{
+    const t=e.target;
+    if(t.dataset.outPct){S.outPct[t.dataset.outPct]=parseFloat(t.value)||0;}
+    if(t.dataset.outRate){S.outRate[t.dataset.outRate]=parseFloat(t.value)||0;}
+    recalcAll();
+  });
+}
+function recalcInputSheet(){
+  document.getElementById('in_homeOutsourced').value = (100-S.homePct>=0? (100-S.homeRegular):0)+"%"; // placeholder fixed below
+  document.getElementById('in_homeOutsourced').value = (100-S.homeRegular)+"%";
+  document.getElementById('in_adOutsourced').value = (100-S.adRegular)+"%";
+  const chk = document.getElementById('manpowerCheck');
+  const sum = S.homePct + S.adPct;
+  chk.textContent = sum===100 ? `\u2713 Home + AD = 100%` : `\u26a0 Home (${S.homePct}%) + AD (${S.adPct}%) = ${sum}% \u2014 should equal 100%`;
+  chk.style.color = sum===100 ? "var(--good)" : "var(--warn)";
+
+  let lvlPctSum=0, lvlCostSum=0;
+  LEVELS.forEach(lv=>{
+    lvlPctSum += S.levelPct[lv];
+    const mhs = CALC.regularLevelMhs ? (CALC.regularLevelMhs[lv]||0) : 0;
+    const cost = mhs * S.levelRate[lv];
+    lvlCostSum += cost;
+    const el = document.getElementById('lvlCost_'+lv); if(el) el.textContent = confUSD(cost);
+  });
+  document.getElementById('lvlPctTotal').textContent = lvlPctSum+"%";
+  document.getElementById('lvlPctTotal').style.color = lvlPctSum===100?"var(--good)":"var(--warn)";
+  document.getElementById('lvlCostTotal').textContent = confUSD(lvlCostSum);
+
+  let outPctSum=0, outCostSum=0;
+  OUT_CATS.forEach(c=>{
+    outPctSum += S.outPct[c.key];
+    const mhs = CALC.outCatMhs ? (CALC.outCatMhs[c.key]||0) : 0;
+    const cost = mhs * S.outRate[c.key];
+    outCostSum += cost;
+    const el = document.getElementById('outCost_'+c.key); if(el) el.textContent = confUSD(cost);
+  });
+  document.getElementById('outPctTotal').textContent = outPctSum+"%";
+  document.getElementById('outPctTotal').style.color = outPctSum===100?"var(--good)":"var(--warn)";
+  document.getElementById('outCostTotal').textContent = confUSD(outCostSum);
+}
+
+/* ===================== MHs SHEET LOGIC ===================== */
+function bindMhsSheet(){
+  document.getElementById('mhsTable').addEventListener('input',e=>{
+    const t=e.target;
+    const i = t.dataset.mhs1!==undefined ? t.dataset.mhs1 : t.dataset.mhs2;
+    if(i===undefined) return;
+    const p = parseInt(t.dataset.pkg)||0;
+    if(t.dataset.mhs1!==undefined) S.mhs[i].pkg[p].d1 = parseFloat(t.value)||0;
+    if(t.dataset.mhs2!==undefined) S.mhs[i].pkg[p].d2 = parseFloat(t.value)||0;
+    recalcAll();
+  });
+}
+let ESTIMATED_PKG = []; // ESTIMATED_PKG[p][i]
+let MM_PKG = [];        // MM_PKG[p][i]
+let ESTIMATED = [];     // consolidated (sum across packages), per discipline
+let MM = [];            // consolidated, per discipline
+let PKG_TOTAL_MHS = []; // PKG_TOTAL_MHS[p] = total estimated MHs for package p
+function recalcMhsSheet(){
+  const n = S.numPackages;
+  ESTIMATED_PKG = []; MM_PKG = []; ESTIMATED = []; MM = [];
+  const pkgSums = []; // pkgSums[p] = {s1,s2,s3,s4}
+  for(let p=0;p<n;p++){
+    ESTIMATED_PKG[p]=[]; MM_PKG[p]=[];
+    pkgSums[p] = {s1:0,s2:0,s3:0,s4:0};
+  }
+  DISCIPLINES.forEach((name,i)=>{
+    let estC=0, mmC=0;
+    for(let p=0;p<n;p++){
+      const pkgVal = S.mhs[i].pkg[p] || {d1:0,d2:0};
+      const d1=pkgVal.d1||0, d2=pkgVal.d2||0;
+      const est = (d1===0 || d2===0) ? Math.max(d1,d2) : Math.min(d1,d2);
+      const mm = S.K>0 ? est/S.K : 0;
+      ESTIMATED_PKG[p][i]=est; MM_PKG[p][i]=mm;
+      estC+=est; mmC+=mm;
+      const estEl = document.getElementById(`mhsEst_${i}_${p}`); if(estEl) estEl.textContent = fmt(est);
+      const mmEl = document.getElementById(`mhsMM_${i}_${p}`); if(mmEl) mmEl.textContent = fmt(mm,2);
+      pkgSums[p].s1+=d1; pkgSums[p].s2+=d2; pkgSums[p].s3+=est; pkgSums[p].s4+=mm;
+    }
+    ESTIMATED[i]=estC; MM[i]=mmC;
+    if(n>1){
+      const estCEl = document.getElementById('mhsEstC_'+i); if(estCEl) estCEl.textContent = fmt(estC);
+      const mmCEl = document.getElementById('mhsMMC_'+i); if(mmCEl) mmCEl.textContent = fmt(mmC,2);
+    }
+  });
+  let grandEst=0, grandMM=0;
+  PKG_TOTAL_MHS = [];
+  for(let p=0;p<n;p++){
+    const s = pkgSums[p];
+    grandEst+=s.s3; grandMM+=s.s4;
+    PKG_TOTAL_MHS[p] = s.s3;
+    const el1=document.getElementById(`mhsSum1_${p}`); if(el1) el1.textContent=fmt(s.s1);
+    const el2=document.getElementById(`mhsSum2_${p}`); if(el2) el2.textContent=fmt(s.s2);
+    const el3=document.getElementById(`mhsSum3_${p}`); if(el3) el3.textContent=fmt(s.s3);
+    const el4=document.getElementById(`mhsSum4_${p}`); if(el4) el4.textContent=fmt(s.s4,2);
+  }
+  if(n>1){
+    const el3c=document.getElementById('mhsSum3C'); if(el3c) el3c.textContent=fmt(grandEst);
+    const el4c=document.getElementById('mhsSum4C'); if(el4c) el4c.textContent=fmt(grandMM,2);
+  }
+}
+
+/* ===================== DEPLOYMENT SHEET ===================== */
+function parabolaDistribution(totalMM, n){
+  if(n<=0) return [];
+  if(n===1) return [totalMM];
+  const mid=(n+1)/2;
+  const weights = [];
+  for(let m=1;m<=n;m++){
+    const x = (m-mid)/(mid);
+    let w = 1 - x*x*0.92; // parabola, keep tails slightly >0
+    if(w<0.02) w=0.02;
+    weights.push(w);
+  }
+  const wsum = weights.reduce((a,b)=>a+b,0);
+  return weights.map(w=> totalMM * w / wsum );
+}
+let DEP = []; // DEP[discIdx] = array of length n (currently selected view)
+let DEP_GROUP = []; // per group array (currently selected view)
+let DEP_PKG = [];       // DEP_PKG[p][discIdx] = array
+let DEP_GROUP_PKG = []; // DEP_GROUP_PKG[p][groupIdx] = array
+let DEP_VIEW = '0'; // '0'..'n-1' = package index, 'consolidated' = all packages summed
+function buildDeploymentTabs(){
+  const wrap = document.getElementById('depPkgTabs');
+  const n = S.numPackages;
+  if(n<=1){
+    wrap.style.display='none';
+    DEP_VIEW = '0';
+    return;
+  }
+  wrap.style.display='flex';
+  wrap.style.flexWrap='wrap';
+  wrap.style.gap='6px';
+  if(DEP_VIEW!=='consolidated' && (isNaN(parseInt(DEP_VIEW)) || parseInt(DEP_VIEW)>=n)) DEP_VIEW='consolidated';
+  let html='';
+  for(let p=0;p<n;p++){
+    html += `<button type="button" class="btn ${DEP_VIEW===String(p)?'primary':'ghost'} small" data-depview="${p}">${packageLabel(p)}</button>`;
+  }
+  html += `<button type="button" class="btn ${DEP_VIEW==='consolidated'?'primary':'ghost'} small" data-depview="consolidated">Consolidated (All Packages)</button>`;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('button[data-depview]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      DEP_VIEW = btn.dataset.depview;
+      buildDeploymentTabs();
+      renderDeploymentView();
+    });
+  });
+}
+function recalcDeployment(){
+  const n = S.numPackages;
+  DEP_PKG = []; DEP_GROUP_PKG = [];
+  for(let p=0;p<n;p++){
+    const sched = packageSchedule(p);
+    DEP_PKG[p] = DISCIPLINES.map((name,i)=>parabolaDistribution(MM_PKG[p] ? (MM_PKG[p][i]||0) : 0, sched));
+    DEP_GROUP_PKG[p] = GROUP_DEFS.map(g=>{
+      const arr = new Array(sched).fill(0);
+      g.idx.forEach(i=>{ DEP_PKG[p][i].forEach((v,m)=>arr[m]+=v); });
+      return arr;
+    });
+  }
+  renderDeploymentView();
+}
+function renderDeploymentView(){
+  const n = S.numPackages;
+  let months, dep, depGroup;
+  if(DEP_VIEW==='consolidated' && n>1){
+    // Overall Project (consolidated) deployment: sum each discipline's total Man-Month across
+    // all packages, then spread that total evenly (parabolic build-up/de-mobilisation) over the
+    // Overall Project Schedule (months) set on the Project Basics sheet.
+    months = S.schedule;
+    dep = DISCIPLINES.map((name,i)=>{
+      let totalMM = 0;
+      for(let p=0;p<n;p++){ totalMM += (MM_PKG[p] ? (MM_PKG[p][i]||0) : 0); }
+      return parabolaDistribution(totalMM, months);
+    });
+    depGroup = GROUP_DEFS.map(g=>{
+      const arr = new Array(months).fill(0);
+      g.idx.forEach(i=>{ dep[i].forEach((v,m)=>arr[m]+=v); });
+      return arr;
+    });
+  } else {
+    const p = Math.min(parseInt(DEP_VIEW)||0, n-1);
+    months = packageSchedule(p);
+    dep = DEP_PKG[p] || [];
+    depGroup = DEP_GROUP_PKG[p] || [];
+  }
+  DEP = dep; DEP_GROUP = depGroup;
+
+  // header months
+  ['depTable','depGroupTable'].forEach(id=>{
+    const thead = document.querySelector('#'+id+' thead tr');
+    while(thead.children.length>1) thead.removeChild(thead.lastChild);
+    for(let m=1;m<=months;m++){ const th=document.createElement('th'); th.style.width="56px"; th.textContent='M'+m; thead.appendChild(th); }
+    const th=document.createElement('th'); th.textContent='Total'; th.style.background='#0a2338'; thead.appendChild(th);
+    const tfoot = document.querySelector('#'+id+' tfoot tr');
+    while(tfoot.children.length>1) tfoot.removeChild(tfoot.lastChild);
+  });
+
+  // discipline table (only disciplines with a non-zero Total are shown)
+  const tbody = document.querySelector('#depTable tbody'); tbody.innerHTML="";
+  let grandTot=0;
+  DISCIPLINES.forEach((name,i)=>{
+    const arr = DEP[i]||[];
+    const tot = arr.reduce((a,b)=>a+b,0);
+    grandTot += tot;
+    if(tot<=0.0001) return;
+    const tr=document.createElement('tr');
+    let html = `<td>${name}</td>`;
+    arr.forEach(v=>{ html += `<td class="num">${fmt(v,1)}</td>`; });
+    html += `<td class="calc">${fmt(tot,1)}</td>`;
+    tr.innerHTML = html; tbody.appendChild(tr);
+  });
+  const tfoot = document.querySelector('#depTable tfoot tr');
+  for(let m=1;m<=months;m++){
+    let colTot=0; DISCIPLINES.forEach((name,i)=>colTot+=(DEP[i]&&DEP[i][m-1])||0);
+    const td=document.createElement('td'); td.className='calc'; td.textContent=fmt(colTot,1); tfoot.appendChild(td);
+  }
+  const tdg=document.createElement('td'); tdg.className='calc'; tdg.textContent=fmt(grandTot,1); tfoot.appendChild(tdg);
+
+  // group table
+  const gtbody = document.querySelector('#depGroupTable tbody'); gtbody.innerHTML="";
+  GROUP_DEFS.forEach((g,gi)=>{
+    const tr=document.createElement('tr');
+    let html = `<td><span class="dep-group-tag">Grp</span> ${g.name}</td>`;
+    let tot=0;
+    (DEP_GROUP[gi]||[]).forEach(v=>{ html+=`<td class="num">${fmt(v,1)}</td>`; tot+=v; });
+    html += `<td class="calc">${fmt(tot,1)}</td>`;
+    tr.innerHTML = html; gtbody.appendChild(tr);
+  });
+  const gtfoot = document.querySelector('#depGroupTable tfoot tr');
+  for(let m=1;m<=months;m++){
+    let colTot=0; DEP_GROUP.forEach(arr=>colTot+=(arr&&arr[m-1])||0);
+    const td=document.createElement('td'); td.className='calc'; td.textContent=fmt(colTot,1); gtfoot.appendChild(td);
+  }
+  const tdg2=document.createElement('td'); tdg2.className='calc'; tdg2.textContent=fmt(grandTot,1); gtfoot.appendChild(tdg2);
+
+  drawDeploymentChart(months);
+}
+// Deterministic, high-variety colour per discipline index (stable regardless of how many
+// disciplines end up with non-zero deployment in a given view).
+function discColor(i){ return `hsl(${(i*47)%360},62%,45%)`; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Pure, data-driven chart builder: takes month count + a discipline-wise
+// deployment array (same shape as the global DEP) and returns SVG markup
+// plus the canvas size it was laid out for. No DOM access, so this can be
+// called for the live on-screen view (current DEP) AND, independently,
+// once per package/consolidated dataset at Excel-export time - which is
+// what makes it possible to embed the chart into the exported workbook.
+function buildDeploymentChartSVG(n, dep){
+  const W=1000;
+  const padL=52, padR=16, padT=34, padB=34; // padB = x-axis month-label band only
+  const chartH=250; // plot area (bars + gridlines) height
+  const innerW=W-padL-padR, innerH=chartH;
+
+  // Only disciplines with a non-zero total in this view are plotted/legended.
+  const activeIdx = DISCIPLINES.map((name,i)=>i).filter(i=>{
+    const arr = dep[i]||[]; return arr.reduce((a,b)=>a+b,0) > 0.0001;
+  });
+
+  const monthTotals = new Array(n).fill(0);
+  activeIdx.forEach(i=>{ (dep[i]||[]).forEach((v,m)=>{ monthTotals[m]=(monthTotals[m]||0)+v; }); });
+  const maxY = Math.max(0.0001, ...monthTotals);
+
+  const stepX = innerW/Math.max(n,1);
+  const barW = Math.max(2, stepX*0.62);
+  const xOf = m => padL + stepX*m + (stepX-barW)/2;
+  const yOf = v => padT + innerH - (v/maxY)*innerH;
+
+  // Pre-compute legend wrapping to know total SVG height needed.
+  let lx=padL, legendRows=1;
+  activeIdx.forEach(i=>{
+    const w = 16 + DISCIPLINES[i].length*5.3;
+    if(lx+w > W-padR){ legendRows++; lx=padL; }
+    lx += w+8;
+  });
+  const legendH = legendRows*14 + 14;
+  const H = padT + innerH + padB + legendH;
+
+  let svgParts = [];
+  svgParts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`);
+  svgParts.push(`<text x="${padL}" y="16" font-size="10.5" fill="#5b6b78" font-weight="700">No. of Persons (per month)</text>`);
+
+  // gridlines
+  for(let g=0;g<=4;g++){
+    const y = padT + innerH*g/4;
+    svgParts.push(`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e5eaee" stroke-width="1"/>`);
+    svgParts.push(`<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#5b6b78">${fmt(maxY*(4-g)/4,0)}</text>`);
+  }
+  // x axis labels (sparse if many months)
+  const labelEvery = Math.max(1, Math.ceil(n/20));
+  for(let m=0;m<n;m++){
+    if(m%labelEvery===0 || m===n-1){
+      svgParts.push(`<text x="${(xOf(m)+barW/2).toFixed(1)}" y="${padT+innerH+16}" text-anchor="middle" font-size="9" fill="#5b6b78">M${m+1}</text>`);
+    }
+  }
+  svgParts.push(`<line x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}" stroke="#5b6b78" stroke-width="1.2"/>`);
+
+  // stacked bars: one segment per active discipline, coloured distinctly, per month
+  for(let m=0;m<n;m++){
+    let yCum = padT+innerH;
+    activeIdx.forEach(i=>{
+      const v = (dep[i]&&dep[i][m])||0;
+      if(v<=0.0001) return;
+      const segH = (v/maxY)*innerH;
+      const yTop = yCum - segH;
+      svgParts.push(`<rect x="${xOf(m).toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(segH,0).toFixed(1)}" fill="${discColor(i)}"><title>${esc(DISCIPLINES[i])} - M${m+1}: ${fmt(v,1)}</title></rect>`);
+      yCum = yTop;
+    });
+    if(monthTotals[m]>0.0001 && n<=40){
+      svgParts.push(`<text x="${(xOf(m)+barW/2).toFixed(1)}" y="${(yCum-4).toFixed(1)}" text-anchor="middle" font-size="8" fill="#16232f" font-weight="700">${fmt(monthTotals[m],0)}</text>`);
+    }
+  }
+
+  // legend (wraps below the chart, one swatch per active discipline)
+  lx=padL; let ly=padT+innerH+padB+12;
+  activeIdx.forEach(i=>{
+    const label = DISCIPLINES[i];
+    const w = 16 + label.length*5.3;
+    if(lx+w > W-padR){ lx=padL; ly+=14; }
+    svgParts.push(`<rect x="${lx}" y="${ly-8}" width="9" height="9" fill="${discColor(i)}"/>`);
+    svgParts.push(`<text x="${lx+12}" y="${ly}" font-size="8" fill="#16232f">${esc(label)}</text>`);
+    lx += w+8;
+  });
+  if(activeIdx.length===0){
+    svgParts.push(`<text x="${padL}" y="${padT+innerH/2}" font-size="12" fill="#5b6b78">No deployment data yet \u2014 fill in the MHs Sheet first.</text>`);
+  }
+
+  return { inner: svgParts.join(""), width: W, height: H };
+}
+
+// Live on-screen chart: draws the current view (DEP) into the #depChart SVG element.
+function drawDeploymentChart(n){
+  const svg = document.getElementById('depChart');
+  const { inner, width:W, height:H } = buildDeploymentChartSVG(n, DEP);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.height = H+'px';
+  svg.innerHTML = inner;
+}
+
+// Rasterizes chart SVG markup to a PNG data URL (2x scale for crisp text
+// when embedded in Excel) via an offscreen canvas. Used only by the Excel
+// export - the live view keeps using the vector SVG directly.
+function svgMarkupToPngDataUrl(inner, W, H, scale){
+  scale = scale || 2;
+  const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg>`;
+  return new Promise((resolve, reject)=>{
+    try{
+      const svg64 = btoa(unescape(encodeURIComponent(fullSvg)));
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = W*scale;
+        canvas.height = H*scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.scale(scale,scale);
+        ctx.drawImage(img, 0, 0, W, H);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => reject(new Error('Deployment chart image could not be rendered for export.'));
+      img.src = 'data:image/svg+xml;base64,' + svg64;
+    } catch(err){ reject(err); }
+  });
+}
+
+/* ===================== CALCULATION SHEET ===================== */
+let CALC = {};
+let CALC_PKG = []; // per-package cost breakdown, CALC_PKG[p] = {totalMhs, homeMhs, adMhs, totalCost}
+function buildOfficeTable(tableId, regMhs, outMhs){
+  const tbody = document.querySelector('#'+tableId+' tbody'); if(!tbody) return {mhsTot:0,costTot:0};
+  tbody.innerHTML="";
+  let mhsTot=0, costTot=0;
+  LEVELS.forEach(lv=>{
+    const mhs = regMhs * (S.levelPct[lv]/100);
+    const cost = mhs * S.levelRate[lv];
+    mhsTot+=mhs; costTot+=cost;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>Regular &ndash; Level ${lv}</td><td class="num">${fmt(mhs)}</td><td class="num">${confUSD(S.levelRate[lv])}</td><td class="num">${confUSD(cost)}</td>`;
+    tbody.appendChild(tr);
+  });
+  OUT_CATS.forEach(c=>{
+    const mhs = outMhs * (S.outPct[c.key]/100);
+    const cost = mhs * S.outRate[c.key];
+    mhsTot+=mhs; costTot+=cost;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>Outsourced &ndash; ${c.label}</td><td class="num">${fmt(mhs)}</td><td class="num">${confUSD(S.outRate[c.key])}</td><td class="num">${confUSD(cost)}</td>`;
+    tbody.appendChild(tr);
+  });
+  return {mhsTot,costTot};
+}
+function computeAndRenderOfficeCost(totalMhs, homeTableId, adTableId, idPrefix){
+  const homeMhs = totalMhs * (S.homePct/100);
+  const adMhs = totalMhs * (S.adPct/100);
+  const homeRegMhs = homeMhs * (S.homeRegular/100);
+  const homeOutMhs = homeMhs * ((100-S.homeRegular)/100);
+  const adRegMhs = adMhs * (S.adRegular/100);
+  const adOutMhs = adMhs * ((100-S.adRegular)/100);
+  const home = buildOfficeTable(homeTableId, homeRegMhs, homeOutMhs);
+  const ad = buildOfficeTable(adTableId, adRegMhs, adOutMhs);
+  const setTxt = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  setTxt(idPrefix+'HomeMhsTot', fmt(home.mhsTot));
+  setTxt(idPrefix+'HomeCostTot', confUSD(home.costTot));
+  setTxt(idPrefix+'AdMhsTot', fmt(ad.mhsTot));
+  setTxt(idPrefix+'AdCostTot', confUSD(ad.costTot));
+  const totalCost = home.costTot + ad.costTot;
+  return {totalMhs, homeMhs, adMhs, totalCost};
+}
+function buildCalcPackageBlocks(){
+  const container = document.getElementById('calcPkgBlocks');
+  const n = S.numPackages;
+  const mainTitle = document.getElementById('calcMainTitle');
+  if(n<=1){
+    container.innerHTML="";
+    mainTitle.textContent = "Discipline-wise MHs Costing (USD)";
+    return;
+  }
+  mainTitle.textContent = "Discipline-wise MHs Costing (USD) \u2014 Consolidated (All Packages)";
+  let html="";
+  for(let p=0;p<n;p++){
+    html += `
+    <div class="card">
+      <h2>Package ${p+1}: ${(packageLabel(p)||"").replace(/</g,'&lt;')} &mdash; MHs Costing (USD)</h2>
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Total Estimated MHs</div><div class="value" id="calcP${p}TotalMHs">0</div></div>
+        <div class="kpi"><div class="label">Home Office MHs</div><div class="value" id="calcP${p}HomeMHs">0</div></div>
+        <div class="kpi"><div class="label">EIL AD Office MHs</div><div class="value" id="calcP${p}AdMHs">0</div></div>
+        <div class="kpi"><div class="label">Total MHs Cost (USD)</div><div class="value" id="calcP${p}TotalCost">$0</div></div>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="section-title">Home Office</div>
+          <div class="tablewrap" style="max-height:none;"><table class="data" id="calcP${p}HomeTable">
+            <thead><tr><th>Category</th><th>MHs</th><th>Rate (USD)</th><th>Cost (USD)</th></tr></thead><tbody></tbody>
+            <tfoot><tr><td>Sub-total</td><td class="calc" id="calcP${p}HomeMhsTot"></td><td></td><td class="calc" id="calcP${p}HomeCostTot"></td></tr></tfoot>
+          </table></div>
+        </div>
+        <div>
+          <div class="section-title">EIL AD Office</div>
+          <div class="tablewrap" style="max-height:none;"><table class="data" id="calcP${p}AdTable">
+            <thead><tr><th>Category</th><th>MHs</th><th>Rate (USD)</th><th>Cost (USD)</th></tr></thead><tbody></tbody>
+            <tfoot><tr><td>Sub-total</td><td class="calc" id="calcP${p}AdMhsTot"></td><td></td><td class="calc" id="calcP${p}AdCostTot"></td></tr></tfoot>
+          </table></div>
+        </div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+function recalcCalculationSheet(){
+  const totalMhs = ESTIMATED.reduce((a,b)=>a+b,0);
+  const result = computeAndRenderOfficeCost(totalMhs, 'calcHomeTable', 'calcAdTable', 'calc');
+  document.getElementById('calcTotalMHs').textContent = fmt(result.totalMhs);
+  document.getElementById('calcHomeMHs').textContent = fmt(result.homeMhs);
+  document.getElementById('calcAdMHs').textContent = fmt(result.adMhs);
+  document.getElementById('calcTotalCost').textContent = confUSD(result.totalCost);
+  CALC.totalCost = result.totalCost;
+  // kept for backward-compat single-package callers (Input Sheet rate preview)
+  CALC.regularLevelMhs = {};
+  LEVELS.forEach(lv=>{
+    const homeMhs = totalMhs*(S.homePct/100), adMhs = totalMhs*(S.adPct/100);
+    const homeRegMhs = homeMhs*(S.homeRegular/100), adRegMhs = adMhs*(S.adRegular/100);
+    CALC.regularLevelMhs[lv] = (homeRegMhs+adRegMhs) * (S.levelPct[lv]/100);
+  });
+  CALC.outCatMhs = {};
+  OUT_CATS.forEach(c=>{
+    const homeMhs = totalMhs*(S.homePct/100), adMhs = totalMhs*(S.adPct/100);
+    const homeOutMhs = homeMhs*((100-S.homeRegular)/100), adOutMhs = adMhs*((100-S.adRegular)/100);
+    CALC.outCatMhs[c.key] = (homeOutMhs+adOutMhs) * (S.outPct[c.key]/100);
+  });
+
+  // per-package costing
+  const n = S.numPackages;
+  CALC_PKG = [];
+  if(n>1){
+    for(let p=0;p<n;p++){
+      const pkgTotalMhs = PKG_TOTAL_MHS[p]||0;
+      const r = computeAndRenderOfficeCost(pkgTotalMhs, `calcP${p}HomeTable`, `calcP${p}AdTable`, `calcP${p}`);
+      document.getElementById(`calcP${p}TotalMHs`).textContent = fmt(r.totalMhs);
+      document.getElementById(`calcP${p}HomeMHs`).textContent = fmt(r.homeMhs);
+      document.getElementById(`calcP${p}AdMHs`).textContent = fmt(r.adMhs);
+      document.getElementById(`calcP${p}TotalCost`).textContent = confUSD(r.totalCost);
+      CALC_PKG.push(r);
+    }
+  }
+}
+
+/* ===================== TP/OEM, SITE VISIT, OTHER COST (dynamic rows) ===================== */
+function initDynSheets(){
+  document.querySelectorAll('.addrow').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key = btn.dataset.add;
+      const map = {tp:['tp',{desc:"",cost:0,file:null,fileName:""}], oem:['oem',{desc:"",cost:0,file:null,fileName:""}], sv:['sv',{disc:"",m:0,v:0,d:0}],
+                   hw:['hw',{desc:"",cost:0}], sw:['sw',{desc:"",cost:0}], of:['of',{desc:"",cost:0}]};
+      const [arrKey, blank] = map[key];
+      S[arrKey].push({...blank});
+      renderAllDynTables(); recalcAll();
+    });
+  });
+  ['tpTable','oemTable','hwTable','swTable','ofTable'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', onDynInput);
+    document.getElementById(id).addEventListener('click', onDynDelete);
+  });
+  document.getElementById('siteVisitTable').addEventListener('input', onDynInput);
+  document.getElementById('siteVisitTable').addEventListener('click', onDynDelete);
+  document.getElementById('in_visitRate').addEventListener('input', e=>{S.visitRate=parseFloat(e.target.value)||0; recalcAll();});
+}
+const TABLE_ARR_MAP = {tpTable:'tp', oemTable:'oem', hwTable:'hw', swTable:'sw', ofTable:'of', siteVisitTable:'sv'};
+function onDynInput(e){
+  const t=e.target; if(!t.dataset.field) return;
+  const tr = t.closest('tr'); const idx = parseInt(tr.dataset.idx);
+  const arrKey = TABLE_ARR_MAP[e.currentTarget.id];
+  if(t.dataset.field==='file'){
+    const file = t.files && t.files[0];
+    if(file){
+      S[arrKey][idx].file = file;
+      S[arrKey][idx].fileName = file.name;
+      renderAllDynTables();
+    }
+    return;
+  }
+  const val = (t.type==='number') ? (parseFloat(t.value)||0) : t.value;
+  S[arrKey][idx][t.dataset.field] = val;
+  recalcAll();
+}
+function onDynDelete(e){
+  const arrKey = TABLE_ARR_MAP[e.currentTarget.id];
+  const clearBtn = e.target.closest('button[data-clearfile]');
+  if(clearBtn){
+    const idx = parseInt(clearBtn.dataset.clearfile);
+    S[arrKey][idx].file = null;
+    S[arrKey][idx].fileName = "";
+    renderAllDynTables(); recalcAll();
+    return;
+  }
+  const viewLink = e.target.closest('a[data-viewfile]');
+  if(viewLink){
+    e.preventDefault();
+    const idx = parseInt(viewLink.dataset.viewfile);
+    const file = S[arrKey][idx].file;
+    if(file){ window.open(URL.createObjectURL(file), '_blank'); }
+    else{ alert("This attachment was recorded from an earlier session (filename only) and is not available to open. Please re-upload it if needed."); }
+    return;
+  }
+  const btn = e.target.closest('button[data-del]'); if(!btn) return;
+  const idx = parseInt(btn.dataset.del);
+  S[arrKey].splice(idx,1);
+  if(S[arrKey].length===0){
+    const blanks = {tp:{desc:"",cost:0,file:null,fileName:""}, oem:{desc:"",cost:0,file:null,fileName:""}, sv:{disc:"",m:0,v:0,d:0}, hw:{desc:"",cost:0}, sw:{desc:"",cost:0}, of:{desc:"",cost:0}};
+    S[arrKey].push({...blanks[arrKey]});
+  }
+  renderAllDynTables(); recalcAll();
+}
+function renderAllDynTables(){
+  renderCostTable('tpTable', S.tp, [{key:'desc',type:'text'}], true);
+  renderCostTable('oemTable', S.oem, [{key:'desc',type:'text'}], true);
+  renderCostTable('hwTable', S.hw, [{key:'desc',type:'text'}], false);
+  renderCostTable('swTable', S.sw, [{key:'desc',type:'text'}], false);
+  renderCostTable('ofTable', S.of, [{key:'desc',type:'text'}], false);
+  renderSiteVisitTable();
+}
+function renderCostTable(tableId, rows, descCols, withFile){
+  const tbody = document.querySelector('#'+tableId+' tbody'); tbody.innerHTML="";
+  rows.forEach((row,i)=>{
+    const tr=document.createElement('tr'); tr.dataset.idx=i;
+    let fileCell = "";
+    if(withFile){
+      const hasFile = !!(row.fileName);
+      fileCell = `<td>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          <label class="btn ghost small" style="cursor:pointer;margin:0;">${hasFile ? "Replace" : "Upload"}
+            <input type="file" data-field="file" style="display:none;">
+          </label>
+          ${hasFile ? `<a href="#" data-viewfile="${i}" title="${(row.fileName||"").replace(/"/g,'&quot;')}" style="font-size:11px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;">${(row.fileName||"").replace(/</g,'&lt;')}</a>
+             <button class="btn ghost small" data-clearfile="${i}" title="Remove attachment">&times;</button>` : ''}
+        </div>
+      </td>`;
+    }
+    tr.innerHTML = `<td class="rownum">${i+1}</td>
+      <td><input type="text" class="cell-input text" data-field="desc" value="${(row.desc||"").replace(/"/g,'&quot;')}"></td>
+      <td><input type="number" class="cell-input" data-field="cost" value="${row.cost||0}" min="0"></td>
+      ${fileCell}
+      <td><button class="btn ghost small" data-del="${i}">&times;</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+function renderSiteVisitTable(){
+  const tbody = document.querySelector('#siteVisitTable tbody'); tbody.innerHTML="";
+  S.sv.forEach((row,i)=>{
+    const tr=document.createElement('tr'); tr.dataset.idx=i;
+    tr.innerHTML = `<td class="rownum">${i+1}</td>
+      <td><input type="text" class="cell-input text" data-field="disc" value="${(row.disc||"").replace(/"/g,'&quot;')}" placeholder="Discipline"></td>
+      <td><input type="number" class="cell-input" data-field="m" value="${row.m||0}" min="0"></td>
+      <td><input type="number" class="cell-input" data-field="v" value="${row.v||0}" min="0"></td>
+      <td><input type="number" class="cell-input" data-field="d" value="${row.d||0}" min="0"></td>
+      <td class="calc" data-out="${i}">0</td>
+      <td><button class="btn ghost small" data-del="${i}">&times;</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+function recalcDynSheets(){
+  function sumTable(rows, calcFn, tableId, outTotalId){
+    let tot=0;
+    rows.forEach((row,i)=>{
+      const v = calcFn(row); tot+=v;
+      const cell = document.querySelector(`#${tableId} td[data-out="${i}"]`);
+      if(cell) cell.textContent = fmt(v,1);
+    });
+    if(outTotalId){
+      const totalEl = document.getElementById(outTotalId);
+      if(totalEl) totalEl.textContent = fmtUSD(tot);
+    }
+    return tot;
+  }
+  const tpTotal = sumRows(S.tp,'cost'); document.getElementById('tpTotal').textContent = fmtUSD(tpTotal);
+  const oemTotal = sumRows(S.oem,'cost'); document.getElementById('oemTotal').textContent = fmtUSD(oemTotal);
+  const hwTotal = sumRows(S.hw,'cost'); document.getElementById('hwTotal').textContent = fmtUSD(hwTotal);
+  const swTotal = sumRows(S.sw,'cost'); document.getElementById('swTotal').textContent = fmtUSD(swTotal);
+  const ofTotal = sumRows(S.of,'cost'); document.getElementById('ofTotal').textContent = fmtUSD(ofTotal);
+
+  const svTotal = sumTable(S.sv, r=> (r.m||0)*(r.v||0)*(r.d||0), 'siteVisitTable', null);
+  document.getElementById('svTotal').textContent = fmt(svTotal,0);
+  const svCost = svTotal * (S.visitRate||0);
+  document.getElementById('svCostNote').textContent = S.visitRate>0 ? `Estimated Site Visit Cost = ${fmt(svTotal,0)} visit-days \u00d7 ${fmtUSD(S.visitRate)} = ${fmtUSD(svCost)}` : "Set a cost per visit-day above to estimate Site Visit cost in the Summary Sheet.";
+
+  CALC.tpTotal=tpTotal; CALC.oemTotal=oemTotal; CALC.hwTotal=hwTotal; CALC.swTotal=swTotal; CALC.ofTotal=ofTotal; CALC.svTotal=svTotal; CALC.svCost=svCost;
+}
+function sumRows(rows,key){ return rows.reduce((a,r)=>a+(parseFloat(r[key])||0),0); }
+
+/* ===================== SUMMARY SHEET ===================== */
+function recalcSummary(){
+  const rows = [
+    {label:"Total MHs Cost", sheet:"Calculation", value: CALC.totalCost||0},
+    {label:"Third Party Services", sheet:"3rd Party & OEM", value: CALC.tpTotal||0},
+    {label:"OEM Services", sheet:"3rd Party & OEM", value: CALC.oemTotal||0},
+    {label:"Hardware Cost", sheet:"Other Cost", value: CALC.hwTotal||0},
+    {label:"Software Cost", sheet:"Other Cost", value: CALC.swTotal||0},
+    {label:"Office Infrastructure Cost", sheet:"Other Cost", value: CALC.ofTotal||0},
+  ];
+  if(S.visitRate>0){ rows.push({label:"Site Visit Cost", sheet:"Site Visit", value: CALC.svCost||0}); }
+  const tbody = document.querySelector('#summaryTable tbody'); tbody.innerHTML="";
+  let total=0;
+  rows.forEach(r=>{
+    total+=r.value;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${r.label}</td><td>${r.sheet}</td><td class="num">${confCur(r.value)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('summaryOriginal').textContent = confCur(total);
+  document.getElementById('bidOriginal').textContent = confCur(total);
+  const finalCost = total * (100-S.reduction)/100;
+  document.getElementById('bidFinal').textContent = confCur(finalCost);
+  CALC.originalCost = total; CALC.finalCost = finalCost;
+
+  const pkgCard = document.getElementById('summaryPkgCard');
+  const n = S.numPackages;
+  if(n>1 && CALC_PKG.length===n){
+    pkgCard.style.display='';
+    const ptbody = document.querySelector('#summaryPkgTable tbody'); ptbody.innerHTML="";
+    let mhsTot=0, costTot=0;
+    for(let p=0;p<n;p++){
+      const r = CALC_PKG[p];
+      mhsTot += r.totalMhs; costTot += r.totalCost;
+      const tr=document.createElement('tr');
+      tr.innerHTML = `<td>${packageLabel(p)}</td><td class="num">${fmt(r.totalMhs)}</td><td class="num">${confUSD(r.totalCost)}</td>`;
+      ptbody.appendChild(tr);
+    }
+    document.getElementById('summaryPkgMhsTotal').textContent = fmt(mhsTot);
+    document.getElementById('summaryPkgCostTotal').textContent = confUSD(costTot);
+  } else {
+    pkgCard.style.display='none';
+  }
+}
+document.getElementById('in_reduction').addEventListener('input', e=>{S.reduction=parseFloat(e.target.value)||0; recalcSummary();});
+
+/* ===================== UTIL ===================== */
+function fmt(n,dec=0){ if(!isFinite(n)) n=0; return Number(n).toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+function fmtUSD(n){ if(!isFinite(n)) n=0; return "$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+/* ===================== MASTER RECALC ===================== */
+function recalcAll(){
+  try{
+    recalcMhsSheet();
+    recalcCalculationSheet();
+    recalcInputSheet();
+    recalcDynSheets();
+    recalcDeployment();
+    recalcSummary();
+  }catch(err){
+    console.error("Calculation error:", err);
+  }
+}
+
+/* ===================== INIT ===================== */
+function init(){
+  buildScheduleOptions();
+  buildPaymentPlan();
+  buildLevelTables();
+  buildMhsTable();
+  buildDeploymentTabs();
+  buildCalcPackageBlocks();
+  renderAllDynTables();
+  bindInputSheet();
+  bindMhsSheet();
+  bindProjectMetaEvents();
+  bindPackagesUI();
+  bindMaskingUI();
+  initDynSheets();
+  recalcAll();
+}
+try{
+  init();
+}catch(err){
+  console.error("Initialization error:", err);
+  alert("A setup error occurred, so live calculations may not update. Please reload the page. Details: "+err.message);
+}
+
+/* ===================== SAMPLE DATA ===================== */
+document.getElementById('loadDemoBtn').addEventListener('click',()=>{
+  S.proposalPrefix="IA"; S.proposalNo="1234";
+  document.getElementById('in_proposalPrefix').value = S.proposalPrefix;
+  document.getElementById('in_proposalNo').value = S.proposalNo;
+  S.projName="Offshore Field Development \u2014 Sample Proposal";
+  document.getElementById('in_projName').value = S.projName;
+  updateProjTitle();
+  S.schedule=24; document.getElementById('in_schedule').value=24;
+  S.K=160; document.getElementById('in_K').value=160;
+  S.sector="Oil & Gas"; S.natureOfProject="Offshore"; S.natureOfProjectOther="";
+  S.projectPhase="FEED";
+  S.appStandard="EIL Specs"; S.appStandardOther="";
+  S.projectLocation="UAE"; S.projectLocationOther="";
+  S.clientType="INTERNATIONAL"; S.clientName="ADNOC OFFSHORE"; S.clientNameOther="";
+  S.currency="USD"; S.currencyOther="";
+  populateProjectMetaUI();
+  S.homePct=60; S.adPct=40; document.getElementById('in_homePct').value=60; document.getElementById('in_adPct').value=40;
+  S.homeRegular=70; S.adRegular=80; document.getElementById('in_homeRegular').value=70; document.getElementById('in_adRegular').value=80;
+  S.levelPct = {10:0,11:0,12:5,13:0,14:7,15:8,16:80,17:0,18:0};
+  S.levelRate = {10:120,11:110,12:95,13:85,14:75,15:65,16:55,17:45,18:35};
+  S.outPct = {manager:25,leadEngineer:9,engineer:33,designer:33};
+  S.outRate = {manager:50,leadEngineer:45,engineer:40,designer:30};
+  S.numPackages=1; S.packages=[{name:"",schedule:24}];
+  S.mhs = DISCIPLINES.map((n,i)=> i<9 ? {pkg:[{d1:1600,d2:1500}]} : {pkg:[{d1:800+ (i%5)*200, d2:750+(i%4)*150}]});
+  S.tp = [{desc:"Third-party inspection agency",cost:120000},{desc:"Specialist survey services",cost:85000}];
+  S.oem = [{desc:"OEM proprietary equipment package review",cost:200000}];
+  S.sv = [{disc:"Process Engineer",m:2,v:3,d:5},{disc:"Piping Engineer",m:1,v:2,d:4}];
+  S.visitRate = 400;
+  S.hw = [{desc:"Workstations & servers",cost:60000}];
+  S.sw = [{desc:"Engineering software licenses",cost:90000}];
+  S.of = [{desc:"Office set-up & furniture",cost:30000}];
+  S.reduction = 5;
+  document.getElementById('in_visitRate').value=400;
+  document.getElementById('in_reduction').value=5;
+  buildNumPackagesOptions(); buildPackagesUI();
+  buildLevelTables(); buildMhsTable(); buildDeploymentTabs(); buildCalcPackageBlocks(); renderAllDynTables();
+  recalcAll();
+});
+
+/* ===================== EXCEL EXPORT ===================== */
+/* ===================== FILE SAVING (desktop app + browser) =====================
+   When bbs15.html runs inside the packaged desktop app (desktop_main.py),
+   window.pywebview.api is present and save_binary_file() opens a native
+   "Save As" dialog, writing the file wherever the person chooses. When
+   this same HTML runs in a plain browser tab (no desktop wrapper), that
+   bridge doesn't exist, so this falls back to the standard Blob + <a
+   download> browser download instead. Every export path below goes
+   through saveFileSmart() so both environments work correctly. */
+function arrayBufferToBase64(buffer){
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunkSize));
+  }
+  return btoa(binary);
+}
+async function saveFileSmart(filename, base64Data, mimeType){
+  if(window.pywebview && window.pywebview.api && window.pywebview.api.save_binary_file){
+    try{
+      const res = await window.pywebview.api.save_binary_file(filename, base64Data);
+      if(res && res.ok) return { saved:true, path: res.path };
+      if(res && res.canceled) return { saved:false, canceled:true };
+      return { saved:false, error: (res && res.error) || 'Unknown error while saving the file.' };
+    }catch(err){
+      return { saved:false, error: err.message || String(err) };
+    }
+  }
+  // Browser fallback: standard Blob + <a download> click.
+  try{
+    const byteChars = atob(base64Data);
+    const byteNumbers = new Array(byteChars.length);
+    for(let i=0;i<byteChars.length;i++) byteNumbers[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNumbers)], {type:mimeType});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    return { saved:true, browserDownload:true };
+  }catch(err){
+    return { saved:false, error: err.message || String(err) };
+  }
+}
+
+document.getElementById('exportBtn').addEventListener('click',exportToExcel);
+/* ===================== EXCEL EXPORT (beautified, ExcelJS) ===================== */
+const XL_NAVY='FF0C2D4D', XL_NAVY_DEEP='FF081D33', XL_STEEL='FF2E6B96', XL_STEEL_LIGHT='FF5B93B8',
+      XL_BLUE1='FF2F7DC0', XL_BLUE2='FF4FA3DC', XL_BLUE3='FF8ECDF0', XL_GOLD='FFE8A33D',
+      XL_WHITE='FFFFFFFF', XL_LIGHT='FFEEF1F3', XL_GOOD='FF2F7D5B', XL_WARN='FFB5401F';
+
+function xlThinBorder(){ const s={style:'thin',color:{argb:'FFD7DEE4'}}; return {top:s,left:s,bottom:s,right:s}; }
+function xlStyleTitle(ws,rowNum,span,text,bg){
+  ws.mergeCells(rowNum,1,rowNum,Math.max(span,2));
+  const c=ws.getCell(rowNum,1); c.value=text;
+  c.font={bold:true,size:13,color:{argb:XL_WHITE}};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg||XL_NAVY}};
+  c.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.getRow(rowNum).height=23;
+}
+function xlStyleSection(ws,rowNum,span,text,bg){
+  ws.mergeCells(rowNum,1,rowNum,Math.max(span,2));
+  const c=ws.getCell(rowNum,1); if(text!==undefined) c.value=text;
+  c.font={bold:true,size:11,color:{argb:XL_WHITE}};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg||XL_STEEL}};
+  c.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.getRow(rowNum).height=20;
+}
+function xlStyleTableHeader(ws,rowNum,bg){
+  const row=ws.getRow(rowNum);
+  row.eachCell({includeEmpty:true},cell=>{
+    cell.font={bold:true,color:{argb:XL_WHITE},size:10};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg||XL_NAVY}};
+    cell.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+    cell.border=xlThinBorder();
+  });
+  row.height=22;
+}
+function xlStyleTotal(ws,rowNum,bg){
+  const row=ws.getRow(rowNum);
+  row.eachCell({includeEmpty:true},cell=>{
+    cell.font={bold:true,color:{argb:'FF0C2D4D'}};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg||'FFEAF1F6'}};
+    cell.border=xlThinBorder();
+  });
+}
+function xlLabelValueRow(ws,rowNum){
+  const row=ws.getRow(rowNum);
+  const c1=row.getCell(1);
+  if(c1.value!==null && c1.value!==undefined && c1.value!==""){
+    c1.font={bold:true,color:{argb:'FF0C2D4D'}};
+    c1.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL_LIGHT}};
+  }
+  row.eachCell({includeEmpty:false},cell=>{ cell.border=xlThinBorder(); });
+}
+function xlZebra(ws,rowNum,bg){
+  const row=ws.getRow(rowNum);
+  row.eachCell({includeEmpty:true},cell=>{
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg}};
+    cell.border=xlThinBorder();
+  });
+}
+function xlBorderRow(ws,rowNum){
+  ws.getRow(rowNum).eachCell({includeEmpty:false},cell=>{ cell.border=xlThinBorder(); });
+}
+function xlAutoWidths(ws, mins){
+  ws.columns.forEach((col,idx)=>{
+    let maxLen = (mins && mins[idx]) ? mins[idx] : 10;
+    col.eachCell({includeEmpty:true},cell=>{
+      const v = cell.value===null||cell.value===undefined ? "" : String(cell.value);
+      if(v.length+2>maxLen) maxLen = Math.min(v.length+2, 46);
+    });
+    col.width = maxLen;
+  });
+}
+
+async function exportToExcel(){
+try{
+  const rateVal = v => CONF_UNMASKED ? v : MASK_STR;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'EIL Proposal Management Tool';
+  workbook.created = new Date();
+  const n = S.numPackages;
+
+  /* ---------- Input Sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('Input Sheet', { properties:{tabColor:{argb:XL_NAVY}}, views:[{state:'frozen', ySplit:1}] });
+    let r=1;
+    xlStyleTitle(ws, r, 3, 'EIL Proposal Input Template', XL_NAVY); r++;
+    const labelRows=[];
+    function pushLV(label,val){ ws.getRow(r).values=[label,val]; labelRows.push(r); r++; }
+
+    pushLV('Proposal No.', resolveProposalNo());
+    pushLV('Name of the Project', S.projName);
+    pushLV('Number of Packages', S.numPackages);
+
+    if(n>1){
+      xlStyleSection(ws, r, 5, 'Package Details (Name, Schedule in months, Progress % Current FY, Progress % Next FY)', XL_STEEL); r++;
+      ws.getRow(r).values=['Package #','Name','Schedule (months)','Progress % Cur FY','Progress % Next FY']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+      S.packages.slice(0,n).forEach((pk,p)=>{
+        ws.getRow(r).values = ["Package "+(p+1), pk.name||"", pk.schedule||S.schedule, pk.progressCurFY===null||pk.progressCurFY===undefined?"":pk.progressCurFY, pk.progressNextFY===null||pk.progressNextFY===undefined?"":pk.progressNextFY];
+        if(p%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r);
+        r++;
+      });
+    } else {
+      pushLV('Project Schedule (months)', S.schedule);
+      pushLV('Progress % - Current FY', (S.packages[0] && S.packages[0].progressCurFY!==null && S.packages[0].progressCurFY!==undefined) ? S.packages[0].progressCurFY : "");
+      pushLV('Progress % - Next FY', (S.packages[0] && S.packages[0].progressNextFY!==null && S.packages[0].progressNextFY!==undefined) ? S.packages[0].progressNextFY : "");
+    }
+
+    pushLV('Sector', S.sector);
+    pushLV('Nature of Project', resolveNature());
+    pushLV('Project Phase', S.projectPhase);
+    pushLV('Applicable Standard / Specification', resolveAppStd());
+    pushLV('Project Location', resolveLocation());
+    pushLV('Client Type', S.clientType);
+    pushLV("Client's Name", resolveClientName());
+    pushLV('Currency', curCode());
+    pushLV('MHs in a month (K)', S.K);
+
+    r++;
+    xlStyleSection(ws, r, 2, 'Payment Plan', XL_STEEL); r++;
+    ws.getRow(r).values=['Item','Type (L=Lumpsum, R=Reimbursable)']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+    PAYMENT_ITEMS.forEach((it,idx)=>{ ws.getRow(r).values=[it.label, S.payment[it.key]]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+
+    r++;
+    xlStyleSection(ws, r, 2, 'Manpower Distribution', XL_STEEL); r++;
+    [['Home Office (x%)',S.homePct],['EIL AD Office (y%)',S.adPct],['Home Office - Regular (a%)',S.homeRegular],['Home Office - Outsourced',100-S.homeRegular],['EIL AD Office - Regular (b%)',S.adRegular],['EIL AD Office - Outsourced',100-S.adRegular]].forEach((row,idx)=>{ ws.getRow(r).values=row; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+
+    r++;
+    xlStyleSection(ws, r, 3, 'Level-wise Break-up (Regular) \u2014 %, Rate USD/MH', XL_STEEL); r++;
+    ws.getRow(r).values=['Level','% Split','Rate (USD/MH)']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+    LEVELS.forEach((lv,idx)=>{ ws.getRow(r).values=['Level '+lv, S.levelPct[lv], rateVal(S.levelRate[lv])]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+
+    r++;
+    xlStyleSection(ws, r, 3, 'Outsourced Break-up \u2014 %, Rate USD/MH', XL_STEEL); r++;
+    ws.getRow(r).values=['Category','% Split','Rate (USD/MH)']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+    OUT_CATS.forEach((c,idx)=>{ ws.getRow(r).values=[c.label, S.outPct[c.key], rateVal(S.outRate[c.key])]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+
+    labelRows.forEach(rn=>xlLabelValueRow(ws,rn));
+    ws.getColumn(1).width = 46;
+    xlAutoWidths(ws, [46,24,18,18,18]);
+    ws.getColumn(1).width = 46;
+  }
+
+  /* ---------- MHs Sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('MHs Sheet', { properties:{tabColor:{argb:XL_STEEL}}, views:[{state:'frozen', xSplit:2, ySplit:1}] });
+    let mhsHeader = ["#","Discipline"];
+    for(let p=0;p<n;p++){ mhsHeader.push(`P${p+1} MHs by Discipline`, `P${p+1} Assumed MHs by PC`, `P${p+1} Estimated MHs`, `P${p+1} Man-Month (MM)`); }
+    if(n>1) mhsHeader.push("Consolidated Estimated MHs","Consolidated Man-Month (MM)");
+    ws.addRow(mhsHeader);
+    xlStyleTableHeader(ws, 1, XL_NAVY);
+
+    DISCIPLINES.forEach((name,i)=>{
+      const row = [i+1, name];
+      for(let p=0;p<n;p++){
+        const pv = S.mhs[i].pkg[p]||{d1:0,d2:0};
+        row.push(pv.d1, pv.d2, ESTIMATED_PKG[p]?(ESTIMATED_PKG[p][i]||0):0, Number((MM_PKG[p]?(MM_PKG[p][i]||0):0).toFixed(2)));
+      }
+      if(n>1) row.push(ESTIMATED[i]||0, Number((MM[i]||0).toFixed(2)));
+      const rn = ws.addRow(row).number;
+      if(i%2===1) xlZebra(ws,rn,XL_LIGHT); else xlBorderRow(ws,rn);
+      ws.getCell(rn,2).font = {bold:true,color:{argb:'FF0C2D4D'}};
+    });
+    {
+      const sumRow = ["","Sum"];
+      for(let p=0;p<n;p++){
+        const d1s = DISCIPLINES.reduce((a,_,i)=>a+((S.mhs[i].pkg[p]||{}).d1||0),0);
+        const d2s = DISCIPLINES.reduce((a,_,i)=>a+((S.mhs[i].pkg[p]||{}).d2||0),0);
+        const ests = ESTIMATED_PKG[p]?ESTIMATED_PKG[p].reduce((a,b)=>a+b,0):0;
+        const mms = MM_PKG[p]?MM_PKG[p].reduce((a,b)=>a+b,0):0;
+        sumRow.push(d1s, d2s, ests, Number(mms.toFixed(2)));
+      }
+      if(n>1) sumRow.push(ESTIMATED.reduce((a,b)=>a+b,0), Number(MM.reduce((a,b)=>a+b,0).toFixed(2)));
+      const rn = ws.addRow(sumRow).number;
+      xlStyleTotal(ws, rn, 'FFEAF1F6');
+    }
+    xlAutoWidths(ws, [6,32]);
+  }
+
+  /* ---------- Deployment sheet(s) ---------- */
+  async function buildDeploymentSheet(name, months, dep, depGroup, tabColor){
+    const ws = workbook.addWorksheet(name.slice(0,31), { properties:{tabColor:{argb:tabColor}}, views:[{state:'frozen', xSplit:1, ySplit:1}] });
+    const depHeader = ["Discipline / Group"]; for(let m=1;m<=months;m++) depHeader.push("M"+m); depHeader.push("Total");
+    ws.addRow(depHeader);
+    xlStyleTableHeader(ws, 1, tabColor);
+
+    GROUP_DEFS.forEach((g,gi)=>{
+      const arr=depGroup[gi]||[];
+      const rn = ws.addRow([g.name, ...arr.map(v=>Number(v.toFixed(2))), Number(arr.reduce((a,b)=>a+b,0).toFixed(2))]).number;
+      ws.getRow(rn).eachCell({includeEmpty:true},cell=>{
+        cell.font={bold:true,color:{argb:XL_WHITE}};
+        cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL_STEEL}};
+        cell.border=xlThinBorder();
+      });
+    });
+    ws.addRow([]);
+    let idx=0;
+    DISCIPLINES.forEach((name2,i)=>{
+      const arr=dep[i]||[];
+      const tot = Number(arr.reduce((a,b)=>a+b,0).toFixed(2));
+      if(tot<=0.0001) return; // only non-zero disciplines
+      const rn = ws.addRow([name2, ...arr.map(v=>Number(v.toFixed(2))), tot]).number;
+      if(idx%2===1) xlZebra(ws,rn,XL_LIGHT); else xlBorderRow(ws,rn);
+      ws.getCell(rn,1).font = {bold:true,color:{argb:'FF0C2D4D'}};
+      const lastCell = ws.getCell(rn, depHeader.length);
+      lastCell.font = {bold:true,color:{argb:'FF0C2D4D'}};
+      lastCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFEAF1F6'}};
+      idx++;
+    });
+
+    // Total row: for each month, the sum across every discipline (mirrors
+    // the on-screen depTable tfoot) plus the overall grand total - this is
+    // the row that was showing on the web page but missing from the export.
+    {
+      let grandTot=0;
+      const totRowVals = ["Total"];
+      for(let m=0;m<months;m++){
+        let colTot=0;
+        DISCIPLINES.forEach((name2,i)=>{ colTot += (dep[i] && dep[i][m]) || 0; });
+        totRowVals.push(Number(colTot.toFixed(2)));
+        grandTot += colTot;
+      }
+      totRowVals.push(Number(grandTot.toFixed(2)));
+      const totRn = ws.addRow(totRowVals).number;
+      xlStyleTotal(ws, totRn, XL_LIGHT);
+    }
+    xlAutoWidths(ws, [30]);
+
+    // Embed the deployment bar chart (rasterized from this sheet's own
+    // dep/months data, not the on-screen view) a couple of rows below the
+    // table, so each package/consolidated sheet gets its own correct chart.
+    try{
+      const { inner, width:W, height:H } = buildDeploymentChartSVG(months, dep);
+      const pngDataUrl = await svgMarkupToPngDataUrl(inner, W, H, 2);
+      const imgId = workbook.addImage({ base64: pngDataUrl, extension: 'png' });
+      const scale = 0.7;
+      ws.addImage(imgId, {
+        tl: { col: 0, row: ws.rowCount + 1 },
+        ext: { width: W*scale, height: H*scale }
+      });
+    } catch(chartErr){
+      console.error('Deployment chart embed failed for sheet "'+name+'":', chartErr);
+    }
+
+    return ws;
+  }
+  if(n<=1){
+    await buildDeploymentSheet("Deployment Sheet", S.schedule, DEP_PKG[0]||DEP, DEP_GROUP_PKG[0]||DEP_GROUP, XL_BLUE1);
+  } else {
+    const depTabColors = [XL_BLUE1, XL_BLUE2, XL_STEEL_LIGHT, XL_GOOD, XL_WARN];
+    for(let p=0;p<n;p++){
+      const sched = packageSchedule(p);
+      await buildDeploymentSheet("Deploy - "+packageLabel(p), sched, DEP_PKG[p], DEP_GROUP_PKG[p], depTabColors[p%depTabColors.length]);
+    }
+    // Overall Project (consolidated) deployment: total MM per discipline (all packages), spread
+    // evenly (parabolic) over the Overall Project Schedule.
+    const depConsol = DISCIPLINES.map((name2,i)=>{
+      let totalMM=0;
+      for(let p=0;p<n;p++){ totalMM += (MM_PKG[p]?(MM_PKG[p][i]||0):0); }
+      return parabolaDistribution(totalMM, S.schedule);
+    });
+    const depGroupConsol = GROUP_DEFS.map(g=>{
+      const arr=new Array(S.schedule).fill(0);
+      g.idx.forEach(i=>{ depConsol[i].forEach((v,m)=>arr[m]+=v); });
+      return arr;
+    });
+    await buildDeploymentSheet("Deploy - Consolidated", S.schedule, depConsol, depGroupConsol, XL_GOLD);
+  }
+
+  /* ---------- Calculation Sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('Calculation Sheet', { properties:{tabColor:{argb:XL_BLUE2}}, views:[{state:'frozen', ySplit:1}] });
+    let r=1;
+    xlStyleTitle(ws, r, 4, 'Discipline-wise MHs Costing (USD) \u2014 Consolidated', XL_NAVY); r++;
+    const lvRows=[];
+    function pushLV2(label,val){ ws.getRow(r).values=[label,val]; lvRows.push(r); r++; }
+    pushLV2('Total Estimated MHs', ESTIMATED.reduce((a,b)=>a+b,0));
+    pushLV2('Home Office MHs', ESTIMATED.reduce((a,b)=>a+b,0)*(S.homePct/100));
+    pushLV2('EIL AD Office MHs', ESTIMATED.reduce((a,b)=>a+b,0)*(S.adPct/100));
+    pushLV2('Total MHs Cost (USD)', rateVal(CALC.totalCost||0));
+
+    if(n>1){
+      r++;
+      xlStyleSection(ws, r, 3, 'Package-wise MHs Cost', XL_STEEL); r++;
+      ws.getRow(r).values=['Package','Estimated MHs','MHs Cost (USD)']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+      for(let p=0;p<n;p++){ const rr=CALC_PKG[p]||{totalMhs:0,totalCost:0}; ws.getRow(r).values=[packageLabel(p), rr.totalMhs, rateVal(rr.totalCost)]; if(p%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; }
+    }
+    r++;
+    ws.getRow(r).values=['Category','MHs','Rate (USD)','Cost (USD)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+    function pushOfficeRows(label, regMhs, outMhs){
+      xlStyleSection(ws, r, 4, label, XL_STEEL); r++;
+      let idx=0;
+      LEVELS.forEach(lv=>{ const mhs = regMhs*(S.levelPct[lv]/100); ws.getRow(r).values=["Regular - Level "+lv, Number(mhs.toFixed(1)), rateVal(S.levelRate[lv]), rateVal(Number((mhs*S.levelRate[lv]).toFixed(0)))]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); idx++; r++; });
+      OUT_CATS.forEach(c=>{ const mhs = outMhs*(S.outPct[c.key]/100); ws.getRow(r).values=["Outsourced - "+c.label, Number(mhs.toFixed(1)), rateVal(S.outRate[c.key]), rateVal(Number((mhs*S.outRate[c.key]).toFixed(0)))]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); idx++; r++; });
+    }
+    const totalMhsX = ESTIMATED.reduce((a,b)=>a+b,0);
+    pushOfficeRows("Home Office", totalMhsX*(S.homePct/100)*(S.homeRegular/100), totalMhsX*(S.homePct/100)*((100-S.homeRegular)/100));
+    pushOfficeRows("EIL AD Office", totalMhsX*(S.adPct/100)*(S.adRegular/100), totalMhsX*(S.adPct/100)*((100-S.adRegular)/100));
+    r++;
+    ws.getRow(r).values=['Total MHs Cost (USD)', rateVal(CALC.totalCost||0)];
+    xlStyleTotal(ws, r, 'FFF2D9AE');
+
+    lvRows.forEach(rn=>xlLabelValueRow(ws,rn));
+    xlAutoWidths(ws, [30,16,16,16]);
+  }
+
+  /* ---------- 3rd Party & OEM sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('3rd Party & OEM', { properties:{tabColor:{argb:XL_STEEL_LIGHT}} });
+    let r=1;
+    xlStyleSection(ws, r, 4, 'Third Party Services', XL_STEEL); r++;
+    ws.getRow(r).values=['#','Description','Cost (USD)','Attachment (Filename)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+    S.tp.forEach((row,idx)=>{ ws.getRow(r).values=[idx+1,row.desc,row.cost,row.fileName||""]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+    ws.getRow(r).values=["","Total", CALC.tpTotal||0,""]; xlStyleTotal(ws,r); r++;
+    r++;
+    xlStyleSection(ws, r, 4, 'OEM Services', XL_STEEL); r++;
+    ws.getRow(r).values=['#','Description','Cost (USD)','Attachment (Filename)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+    S.oem.forEach((row,idx)=>{ ws.getRow(r).values=[idx+1,row.desc,row.cost,row.fileName||""]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+    ws.getRow(r).values=["","Total", CALC.oemTotal||0,""]; xlStyleTotal(ws,r);
+    xlAutoWidths(ws, [5,34,16,22]);
+  }
+
+  /* ---------- Site Visit sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('Site Visit Sheet', { properties:{tabColor:{argb:XL_BLUE3}}, views:[{state:'frozen', ySplit:1}] });
+    let r=1;
+    ws.getRow(r).values=['S.No.','Discipline','No. of Persons (m)','Visits (v)','Days (d)','Total Site-Visits (m x v x d)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+    S.sv.forEach((row,idx)=>{ ws.getRow(r).values=[idx+1,row.disc,row.m,row.v,row.d,(row.m||0)*(row.v||0)*(row.d||0)]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+    ws.getRow(r).values=["","","","","Total", CALC.svTotal||0]; xlStyleTotal(ws,r); r++;
+    r++;
+    ws.getRow(r).values=['Cost per visit-day (USD)', S.visitRate]; xlLabelValueRow(ws,r); r++;
+    ws.getRow(r).values=['Estimated Site Visit Cost (USD)', CALC.svCost||0]; xlLabelValueRow(ws,r);
+    xlAutoWidths(ws, [8,26,16,12,12,18]);
+  }
+
+  /* ---------- Other Cost sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('Other Cost Sheet', { properties:{tabColor:{argb:XL_GOOD}} });
+    let r=1;
+    function otherBlock(title, rowsArr){
+      xlStyleSection(ws, r, 3, title, XL_STEEL); r++;
+      ws.getRow(r).values=['S.No.','Description','Cost (USD)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+      rowsArr.forEach((row,idx)=>{ ws.getRow(r).values=[idx+1,row.desc,row.cost]; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+      ws.getRow(r).values=["","Total", sumRows(rowsArr,'cost')]; xlStyleTotal(ws,r); r++;
+      r++;
+    }
+    otherBlock("Hardware Cost", S.hw);
+    otherBlock("Software Cost", S.sw);
+    otherBlock("Office Infrastructure Cost", S.of);
+    xlAutoWidths(ws, [8,34,16]);
+  }
+
+  /* ---------- Summary Sheet ---------- */
+  {
+    const ws = workbook.addWorksheet('Summary Sheet', { properties:{tabColor:{argb:XL_GOLD}}, views:[{state:'frozen', ySplit:1}] });
+    let r=1;
+    ws.getRow(r).values=['Cost Head','Source Sheet','Cost (USD)']; xlStyleTableHeader(ws,r,XL_NAVY); r++;
+    const sumEntries = [
+      ["Total MHs Cost","Calculation", rateVal(CALC.totalCost||0)],
+      ["Third Party Services","3rd Party & OEM", CALC.tpTotal||0],
+      ["OEM Services","3rd Party & OEM", CALC.oemTotal||0],
+      ["Hardware Cost","Other Cost", CALC.hwTotal||0],
+      ["Software Cost","Other Cost", CALC.swTotal||0],
+      ["Office Infrastructure Cost","Other Cost", CALC.ofTotal||0],
+    ];
+    if(S.visitRate>0) sumEntries.push(["Site Visit Cost","Site Visit", CALC.svCost||0]);
+    sumEntries.forEach((row,idx)=>{ ws.getRow(r).values=row; if(idx%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; });
+
+    r++;
+    ws.getRow(r).values=['Original Cost', rateVal(CALC.originalCost||0)]; xlLabelValueRow(ws,r); r++;
+    ws.getRow(r).values=['Rationalization Factor (%)', S.reduction]; xlLabelValueRow(ws,r); r++;
+    ws.getRow(r).values=['Final Cost for Bidding (USD)', rateVal(CALC.finalCost||0)];
+    ws.getRow(r).eachCell({includeEmpty:true},cell=>{
+      cell.font={bold:true,size:12,color:{argb:XL_NAVY_DEEP}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL_GOLD}};
+      cell.border=xlThinBorder();
+    });
+    r++;
+    if(n>1){
+      r++;
+      xlStyleSection(ws, r, 3, 'Package-wise MHs Cost', XL_STEEL); r++;
+      ws.getRow(r).values=['Package','Estimated MHs','MHs Cost (USD)']; xlStyleTableHeader(ws,r,XL_STEEL_LIGHT); r++;
+      for(let p=0;p<n;p++){ const rr=CALC_PKG[p]||{totalMhs:0,totalCost:0}; ws.getRow(r).values=[packageLabel(p), rr.totalMhs, rateVal(rr.totalCost)]; if(p%2===1) xlZebra(ws,r,XL_LIGHT); else xlBorderRow(ws,r); r++; }
+    }
+    xlAutoWidths(ws, [30,20,18]);
+  }
+
+  const propPrefix = resolveProposalNo() ? resolveProposalNo()+"_" : "";
+  const fname = propPrefix + (S.projName ? S.projName.replace(/[^a-z0-9]+/gi,'_') : "EIL_Proposal") + "_Input.xlsx";
+  const buffer = await workbook.xlsx.writeBuffer();
+  const base64Data = arrayBufferToBase64(buffer);
+  const saveResult = await saveFileSmart(fname, base64Data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  if(saveResult.canceled) return; // user closed the Save As dialog - nothing to report
+  if(!saveResult.saved){
+    alert("Could not save the Excel file:\n"+saveResult.error);
+    return;
+  }
+
+  const maskNote = CONF_UNMASKED ? "" :
+    "\n\nNote: confidential Rate/Cost figures (Level & Outsourced rates, MHs cost, Original/Final cost) are masked as \u2022\u2022\u2022\u2022\u2022\u2022 in this file since confidential figures are currently locked. Tick \"Unmask confidential figures\" first if you need the actual figures in the export.";
+  alert("Exported successfully"+(saveResult.path ? " to:\n"+saveResult.path : " (downloaded as "+fname+")")+maskNote);
+}catch(err){
+  alert("Export failed: "+err.message);
+}
+}
+
+/* ===================== EXPORT TO DATABASE (Excel-based proposal database) ===================== */
+const DB_KEY = 'eil_ad_proposal_database_v1';
+function buildDatabaseRecord(){
+  const totalMhs = ESTIMATED.reduce((a,b)=>a+b,0);
+  return {
+    savedAt: new Date().toISOString(),
+    proposalNo: resolveProposalNo(),
+    projectName: S.projName,
+    sector: S.sector,
+    natureOfProject: resolveNature(),
+    projectPhase: S.projectPhase,
+    applicableStandard: resolveAppStd(),
+    projectLocation: resolveLocation(),
+    clientType: S.clientType,
+    clientName: resolveClientName(),
+    schedule: S.schedule,
+    currency: curCode(),
+    totalEstimatedMHs: Number(totalMhs.toFixed(1)),
+    totalMhsCost: CALC.totalCost||0,
+    thirdPartyCost: CALC.tpTotal||0,
+    oemCost: CALC.oemTotal||0,
+    hardwareCost: CALC.hwTotal||0,
+    softwareCost: CALC.swTotal||0,
+    officeInfraCost: CALC.ofTotal||0,
+    siteVisitCost: CALC.svCost||0,
+    originalCost: CALC.originalCost||0,
+    reductionFactor: S.reduction,
+    finalCost: CALC.finalCost||0
+  };
+}
+function setDbStatus(count){
+  const el = document.getElementById('dbStatus');
+  if(el) el.textContent = count + " proposal(s) in local database";
+}
+async function exportToDatabase(){
+  if(!CONF_UNMASKED){
+    alert("Please tick \"Unmask confidential figures\" on the Input Sheet and enter the password before exporting to the database, since it stores commercial rate and cost figures.");
+    return;
+  }
+  if(!S.projName){
+    alert("Please enter a Project Name (Input Sheet) before saving this proposal to the database.");
+    return;
+  }
+  if(!S.proposalNo || S.proposalNo.length!==4){
+    alert("Please enter a valid 4-digit Proposal No. (Input Sheet) before saving this proposal to the database, since it is used as the unique record identifier.");
+    return;
+  }
+  let records = [];
+  try{ records = JSON.parse(localStorage.getItem(DB_KEY)||"[]"); }catch(e){ records=[]; }
+  const propNo = resolveProposalNo();
+  if(records.some(r=>r.proposalNo===propNo)){
+    const ok = confirm("Proposal No. "+propNo+" already exists in the local database. Adding another record with the same Proposal No. will create a duplicate unique-field entry.\n\nContinue anyway?");
+    if(!ok) return;
+  }
+  records.push(buildDatabaseRecord());
+  try{
+    localStorage.setItem(DB_KEY, JSON.stringify(records));
+  }catch(e){
+    alert("Could not save this record to the local database: "+e.message);
+    return;
+  }
+  setDbStatus(records.length);
+
+  const header = ["Proposal No.","Saved On","Project Name","Sector","Nature of Project","Project Phase","Applicable Standard/Spec","Project Location","Client Type","Client Name","Schedule (months)","Currency","Total Estimated MHs","Total MHs Cost","Third Party Services Cost","OEM Services Cost","Hardware Cost","Software Cost","Office Infrastructure Cost","Site Visit Cost","Original Cost (Total)","Rationalization Factor (%)","Final Cost for Bidding"];
+  const aoa = [header, ...records.map(r=>[
+    r.proposalNo, formatSavedTimestamp(r.savedAt), r.projectName, r.sector, r.natureOfProject, r.projectPhase, r.applicableStandard,
+    r.projectLocation, r.clientType, r.clientName, r.schedule, r.currency, r.totalEstimatedMHs, r.totalMhsCost,
+    r.thirdPartyCost, r.oemCost, r.hardwareCost, r.softwareCost, r.officeInfraCost, r.siteVisitCost,
+    r.originalCost, r.reductionFactor, r.finalCost
+  ])];
+  const wb2 = XLSX.utils.book_new();
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa);
+  XLSX.utils.book_append_sheet(wb2, ws2, "Proposal Database");
+  const base64Db = XLSX.write(wb2, {type:'base64', bookType:'xlsx'});
+  const dbResult = await saveFileSmart("EIL_AD_Proposal_Database.xlsx", base64Db, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  if(dbResult.canceled){
+    alert("This proposal's summary has been added to the local proposal database ("+records.length+" record(s) total). The .xlsx export was not saved since the Save As dialog was closed - use \"Export DB\" again any time to save it.");
+    return;
+  }
+  if(!dbResult.saved){
+    alert("This proposal's summary has been added to the local proposal database ("+records.length+" record(s) total), but the .xlsx export failed: "+dbResult.error);
+    return;
+  }
+  alert("This proposal's summary has been added to the local proposal database ("+records.length+" record(s) total), and the full database has been "+(dbResult.browserDownload?"downloaded":"saved")+" as EIL_AD_Proposal_Database.xlsx"+(dbResult.path?(" to:\n"+dbResult.path):"")+".\n\nNote: this database lives in this app's local storage only. Keep the exported .xlsx as your master record if you use multiple computers.");
+}
+document.getElementById('exportDbBtn').addEventListener('click', exportToDatabase);
+(function initDbStatusOnLoad(){
+  try{ const records = JSON.parse(localStorage.getItem(DB_KEY)||"[]"); setDbStatus(records.length); }catch(e){ setDbStatus(0); }
+})();
+
+/* ===================== EXCEL IMPORT ===================== */
+document.getElementById('importFile').addEventListener('change', function(e){
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      importFromWorkbook(wb);
+      recalcAll();
+      alert("Data imported successfully.");
+    }catch(err){
+      alert("Could not read this file. Please ensure it was exported from this template.\n"+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = "";
+});
+function sheetAOA(wb, name){
+  if(!wb.Sheets[name]) return null;
+  return XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:""});
+}
+function importFromWorkbook(wb){
+  CONF_UNMASKED = false;
+  const inS = sheetAOA(wb,"Input Sheet");
+  if(inS){
+    inS.forEach(row=>{
+      if(row[0]==="Proposal No."){
+        const v = (row[1]||"").toString();
+        const m = v.match(/^(IA|PA)-?(\d{0,4})$/i);
+        if(m){ S.proposalPrefix = m[1].toUpperCase(); S.proposalNo = m[2]; }
+      }
+      if(row[0]==="Name of the Project") S.projName = row[1]||"";
+      if(row[0]==="Number of Packages") S.numPackages = parseInt(row[1])||1;
+      if(/^Package \d+$/.test(row[0]) && S.numPackages>1){
+        const p = parseInt(row[0].replace('Package ',''))-1;
+        if(p>=0){
+          S.packages[p] = {
+            name:row[1]||"", schedule:parseInt(row[2])||S.schedule,
+            progressCurFY: row[3]!==undefined && row[3]!=="" ? parseFloat(row[3]) : null,
+            progressNextFY: row[4]!==undefined && row[4]!=="" ? parseFloat(row[4]) : null
+          };
+        }
+      }
+      if(row[0]==="Project Schedule (months)") S.schedule = parseInt(row[1])||S.schedule;
+      if(row[0]==="Progress % - Current FY"){
+        if(!S.packages[0]) S.packages[0]={name:"",schedule:S.schedule,progressCurFY:null,progressNextFY:null};
+        S.packages[0].progressCurFY = row[1]!==undefined && row[1]!=="" ? parseFloat(row[1]) : null;
+      }
+      if(row[0]==="Progress % - Next FY"){
+        if(!S.packages[0]) S.packages[0]={name:"",schedule:S.schedule,progressCurFY:null,progressNextFY:null};
+        S.packages[0].progressNextFY = row[1]!==undefined && row[1]!=="" ? parseFloat(row[1]) : null;
+      }
+      if(row[0]==="Sector") S.sector = row[1]||"";
+      if(row[0]==="Nature of Project"){
+        const v = row[1]||"";
+        if(v && !NATURE_OG.includes(v) && !NATURE_NONOG.includes(v)){ S.natureOfProject="Others"; S.natureOfProjectOther=v; }
+        else { S.natureOfProject=v; S.natureOfProjectOther=""; }
+      }
+      if(row[0]==="Project Phase") S.projectPhase = row[1]||"";
+      if(row[0]==="Applicable Standard / Specification"){
+        const v = row[1]||"";
+        if(v && !APP_STANDARDS.includes(v)){ S.appStandard="Others"; S.appStandardOther=v; }
+        else { S.appStandard=v; S.appStandardOther=""; }
+      }
+      if(row[0]==="Project Location"){
+        const v = row[1]||"";
+        if(v && !PROJECT_LOCATIONS.includes(v)){ S.projectLocation="OTHERS"; S.projectLocationOther=v; }
+        else { S.projectLocation=v; S.projectLocationOther=""; }
+      }
+      if(row[0]==="Client Type") S.clientType = row[1]||"";
+      if(row[0]==="Client's Name"){
+        const v = row[1]||"";
+        if(S.clientType==='DOMESTIC' && v && !CLIENT_DOMESTIC.includes(v)){ S.clientName="OTHERS"; S.clientNameOther=v; }
+        else if(S.clientType==='INTERNATIONAL' && v && !CLIENT_INTERNATIONAL.includes(v)){ S.clientName="OTHERS"; S.clientNameOther=v; }
+        else { S.clientName=v; S.clientNameOther=""; }
+      }
+      if(row[0]==="Currency"){
+        const v = row[1]||"";
+        if(v && !CURRENCY_OPTIONS.includes(v)){ S.currency="Others"; S.currencyOther=v; }
+        else { S.currency=v||"USD"; S.currencyOther=""; }
+      }
+      if(row[0]==="MHs in a month (K)") S.K = parseFloat(row[1])||S.K;
+      if(row[0]==="Home Office (x%)") S.homePct = parseFloat(row[1])||0;
+      if(row[0]==="EIL AD Office (y%)") S.adPct = parseFloat(row[1])||0;
+      if(row[0]==="Home Office - Regular (a%)") S.homeRegular = parseFloat(row[1])||0;
+      if(row[0]==="EIL AD Office - Regular (b%)") S.adRegular = parseFloat(row[1])||0;
+      LEVELS.forEach(lv=>{ if(row[0]==="Level "+lv){ S.levelPct[lv]=parseFloat(row[1])||0; S.levelRate[lv]=parseFloat(row[2])||0; } });
+      OUT_CATS.forEach(c=>{ if(row[0]===c.label){ S.outPct[c.key]=parseFloat(row[1])||0; S.outRate[c.key]=parseFloat(row[2])||0; } });
+      PAYMENT_ITEMS.forEach(it=>{ if(row[0]===it.label && (row[1]==="L"||row[1]==="R")) S.payment[it.key]=row[1]; });
+    });
+  }
+  resizePackagesArray(S.numPackages||1);
+  const mhsS = sheetAOA(wb,"MHs Sheet");
+  if(mhsS){
+    const n = S.numPackages||1;
+    for(let i=1;i<mhsS.length-1;i++){
+      const row = mhsS[i]; const idx = (row[0]-1);
+      if(idx>=0 && idx<DISCIPLINES.length){
+        for(let p=0;p<n;p++){
+          const baseCol = 2 + p*4;
+          if(!S.mhs[idx].pkg[p]) S.mhs[idx].pkg[p] = {d1:0,d2:0};
+          S.mhs[idx].pkg[p].d1 = parseFloat(row[baseCol])||0;
+          S.mhs[idx].pkg[p].d2 = parseFloat(row[baseCol+1])||0;
+        }
+      }
+    }
+  }
+  const tpoem = sheetAOA(wb,"3rd Party & OEM");
+  if(tpoem){
+    S.tp=[]; S.oem=[]; let mode=null;
+    tpoem.forEach(row=>{
+      if(row[0]==="Third Party Services") mode='tp';
+      else if(row[0]==="OEM Services") mode='oem';
+      else if(row[0]==="#"){}
+      else if(row[0]==="" && row[1]==="Total"){ mode=null; }
+      else if(mode && row[1]!==undefined && row[1]!==""){ S[mode].push({desc:row[1], cost:parseFloat(row[2])||0, file:null, fileName:row[3]||""}); }
+    });
+    if(S.tp.length===0) S.tp=[{desc:"",cost:0,file:null,fileName:""}];
+    if(S.oem.length===0) S.oem=[{desc:"",cost:0,file:null,fileName:""}];
+  }
+  const sv = sheetAOA(wb,"Site Visit Sheet");
+  if(sv){
+    S.sv=[];
+    for(let i=1;i<sv.length;i++){
+      const row=sv[i];
+      if(row[0]==="Cost per visit-day (USD)"){ S.visitRate=parseFloat(row[1])||0; continue; }
+      if(typeof row[0]==='number' && row[1]!==undefined){ S.sv.push({disc:row[1], m:parseFloat(row[2])||0, v:parseFloat(row[3])||0, d:parseFloat(row[4])||0}); }
+    }
+    if(S.sv.length===0) S.sv=[{disc:"",m:0,v:0,d:0}];
+  }
+  const oc = sheetAOA(wb,"Other Cost Sheet");
+  if(oc){
+    S.hw=[];S.sw=[];S.of=[]; let mode=null;
+    oc.forEach(row=>{
+      if(row[0]==="Hardware Cost") mode='hw';
+      else if(row[0]==="Software Cost") mode='sw';
+      else if(row[0]==="Office Infrastructure Cost") mode='of';
+      else if(row[0]==="S.No."){}
+      else if(row[0]==="" && row[1]==="Total"){ mode=null; }
+      else if(mode && row[1]!==undefined && row[1]!==""){ S[mode].push({desc:row[1], cost:parseFloat(row[2])||0}); }
+    });
+    if(S.hw.length===0) S.hw=[{desc:"",cost:0}];
+    if(S.sw.length===0) S.sw=[{desc:"",cost:0}];
+    if(S.of.length===0) S.of=[{desc:"",cost:0}];
+  }
+  const sum = sheetAOA(wb,"Summary Sheet");
+  if(sum){
+    sum.forEach(row=>{ if(row[0]==="Rationalization Factor (%)") S.reduction=parseFloat(row[1])||0; });
+  }
+
+  document.getElementById('in_projName').value = S.projName;
+  document.getElementById('in_schedule').value = S.schedule;
+  document.getElementById('in_K').value = S.K;
+  document.getElementById('in_homePct').value = S.homePct;
+  document.getElementById('in_adPct').value = S.adPct;
+  document.getElementById('in_homeRegular').value = S.homeRegular;
+  document.getElementById('in_adRegular').value = S.adRegular;
+  document.getElementById('in_visitRate').value = S.visitRate;
+  document.getElementById('in_reduction').value = S.reduction;
+  populateProjectMetaUI();
+  buildPaymentPlan();
+  buildLevelTables();
+  buildMhsTable();
+  buildDeploymentTabs();
+  buildCalcPackageBlocks();
+  renderAllDynTables();
+}
+
+/* ===================== SAVE / LOAD PROGRESS (browser storage) ===================== */
+const PROGRESS_KEY = 'eil_ad_proposal_progress_v1';
+function refreshUIFromState(){
+  CONF_UNMASKED = false;
+  document.getElementById('in_projName').value = S.projName;
+  document.getElementById('in_schedule').value = S.schedule;
+  document.getElementById('in_K').value = S.K;
+  document.getElementById('in_homePct').value = S.homePct;
+  document.getElementById('in_adPct').value = S.adPct;
+  document.getElementById('in_homeRegular').value = S.homeRegular;
+  document.getElementById('in_adRegular').value = S.adRegular;
+  document.getElementById('in_visitRate').value = S.visitRate;
+  document.getElementById('in_reduction').value = S.reduction;
+  buildScheduleOptions();
+  document.getElementById('in_schedule').value = S.schedule;
+  populateProjectMetaUI();
+  buildPaymentPlan();
+  buildLevelTables();
+  buildMhsTable();
+  buildDeploymentTabs();
+  buildCalcPackageBlocks();
+  renderAllDynTables();
+  recalcAll();
+}
+function formatSavedTimestamp(iso){
+  try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; }
+}
+function setProgressStatus(text){
+  const el = document.getElementById('progressStatus');
+  if(el) el.textContent = text;
+}
+function saveProgress(){
+  try{
+    const stateCopy = JSON.parse(JSON.stringify(S, (key, value) => key === 'file' ? undefined : value));
+    const payload = { savedAt: new Date().toISOString(), state: stateCopy };
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(payload));
+    setProgressStatus('Saved '+formatSavedTimestamp(payload.savedAt));
+    alert("Progress saved in this browser.\n\nNote: any file attachments in the 3rd Party & OEM tables are not included in this save (browser storage cannot hold file contents) \u2014 only their filenames are kept as a reminder to re-attach them if you reload later.");
+  }catch(err){
+    alert("Could not save progress in this browser: "+err.message);
+  }
+}
+function loadProgress(silent){
+  let raw;
+  try{ raw = localStorage.getItem(PROGRESS_KEY); }catch(err){ raw = null; }
+  if(!raw){
+    if(!silent) alert("No saved progress was found in this browser.");
+    return;
+  }
+  let payload;
+  try{ payload = JSON.parse(raw); }catch(err){
+    if(!silent) alert("Saved progress could not be read.");
+    return;
+  }
+  if(!silent){
+    const ok = confirm("Restore progress saved on "+formatSavedTimestamp(payload.savedAt)+"?\n\nThis will replace everything currently on screen.");
+    if(!ok) return;
+  }
+  Object.keys(S).forEach(k=>delete S[k]);
+  Object.assign(S, payload.state);
+  (S.tp||[]).forEach(r=>{ r.file=null; });
+  (S.oem||[]).forEach(r=>{ r.file=null; });
+  if(!S.tp || S.tp.length===0) S.tp=[{desc:"",cost:0,file:null,fileName:""}];
+  if(!S.oem || S.oem.length===0) S.oem=[{desc:"",cost:0,file:null,fileName:""}];
+  refreshUIFromState();
+  setProgressStatus('Restored save from '+formatSavedTimestamp(payload.savedAt));
+}
+document.getElementById('saveProgressBtn').addEventListener('click', saveProgress);
+document.getElementById('loadProgressBtn').addEventListener('click', ()=>loadProgress(false));
+(function checkForSavedProgressOnLoad(){
+  let raw;
+  try{ raw = localStorage.getItem(PROGRESS_KEY); }catch(err){ raw = null; }
+  if(!raw) return;
+  try{
+    const payload = JSON.parse(raw);
+    setProgressStatus('Last saved '+formatSavedTimestamp(payload.savedAt)+' (in this browser)');
+  }catch(err){ /* ignore unreadable saved data */ }
+})();
+</script>
+</body>
+</html>
