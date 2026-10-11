@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MBBS Technologies — HTML Obfuscator &amp; Encryptor</title>
+<style>
+  :root{
+    --bg1:#eaf6ff; --bg2:#d6ecfb; --panel:#ffffff;
+    --ink:#0b3c5d; --muted:#5b7f99; --line:#b8dcf3;
+    --blue:#1e88e5; --blue-dark:#1565c0; --blue-light:#4fc3f7;
+    --ok:#1b8a5a; --err:#c62828;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 100%);
+    background-attachment:fixed; color:var(--ink); min-height:100vh;
+    padding:26px 16px 0; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+
+  .app-header{
+    background:linear-gradient(135deg,#4fc3f7 0%,#1e88e5 55%,#1565c0 100%);
+    color:#fff; border-radius:18px; padding:20px 24px;
+    display:flex; align-items:center; gap:16px;
+    box-shadow:0 12px 30px rgba(21,101,192,.28);
+  }
+  .logo{
+    width:58px;height:58px;flex:none;border-radius:15px;
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.5);
+    display:grid;place-items:center; font-weight:800;font-size:14px;letter-spacing:.8px;
+  }
+  .head-text h1{margin:0;font-size:1.22rem;letter-spacing:.2px;}
+  .head-text p{margin:4px 0 0;font-size:.85rem;opacity:.92;}
+  .head-text .dev{
+    display:inline-block;margin-top:8px;font-size:.72rem;letter-spacing:.6px;
+    text-transform:uppercase;background:rgba(255,255,255,.2);
+    border:1px solid rgba(255,255,255,.4);padding:4px 10px;border-radius:999px;
+  }
+
+  .warn{
+    background:#fff4e5;border:1px solid #ffcc80;color:#8a5300;
+    padding:12px 14px;border-radius:12px;font-size:.85rem;
+    margin-top:14px;line-height:1.5;
+  }
+  .note{
+    background:#eef7ff;border:1px solid var(--line);color:#1d5d86;
+    padding:12px 14px;border-radius:12px;font-size:.82rem;
+    margin-top:14px;line-height:1.6;
+  }
+  .note strong{color:var(--blue-dark);}
+
+  .tabs{display:flex;gap:10px;margin:22px 0 14px;}
+  .tab{
+    flex:1;cursor:pointer;font-family:inherit;
+    border:1px solid var(--line);background:#fff;color:var(--muted);
+    padding:13px 14px;border-radius:12px;
+    font-size:.95rem;font-weight:600;transition:all .2s ease;
+  }
+  .tab:hover{border-color:var(--blue-light);color:var(--blue-dark);}
+  .tab.active{
+    background:linear-gradient(135deg,#4fc3f7,#1e88e5);
+    color:#fff;border-color:transparent;
+    box-shadow:0 8px 18px rgba(30,136,229,.32);
+  }
+
+  .panel{
+    display:none;background:var(--panel);
+    border:1px solid var(--line);border-radius:16px;
+    padding:22px;box-shadow:0 12px 30px rgba(21,101,192,.10);
+  }
+  .panel.active{display:block;}
+
+  .field{margin-bottom:20px;}
+  .field:last-of-type{margin-bottom:10px;}
+  .field > label{
+    display:block;font-weight:700;font-size:.9rem;
+    margin-bottom:9px;color:var(--blue-dark);
+  }
+
+  .dropzone{
+    border:2px dashed var(--line);border-radius:14px;background:#f6fbff;
+    padding:26px 18px;text-align:center;cursor:pointer;transition:all .2s ease;
+  }
+  .dropzone:hover,.dropzone.drag{
+    border-color:var(--blue);background:#e9f5ff;transform:translateY(-1px);
+  }
+  .dz-icon{font-size:30px;line-height:1;}
+  .dz-text{margin-top:9px;font-size:.9rem;color:var(--muted);line-height:1.6;}
+  .dz-text strong{color:var(--blue-dark);}
+
+  .file-chip{
+    margin-top:10px;background:#e9f5ff;border:1px solid var(--line);
+    border-radius:10px;padding:9px 13px;font-size:.85rem;color:var(--blue-dark);
+    display:flex;justify-content:space-between;gap:12px;word-break:break-all;
+  }
+  .file-chip span:last-child{white-space:nowrap;opacity:.75;}
+
+  input[type=password],input[type=text]{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;
+    font-size:.95rem;font-family:inherit;background:#f8fcff;color:var(--ink);
+    outline:none;transition:all .2s ease;
+  }
+  input[type=password]:focus,input[type=text]:focus{
+    border-color:var(--blue);background:#fff;
+    box-shadow:0 0 0 3px rgba(30,136,229,.15);
+  }
+  .pw-row{position:relative;margin-bottom:10px;}
+  .pw-row input{padding-right:48px;}
+  .eye{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    border:none;background:transparent;cursor:pointer;
+    font-size:1rem;padding:6px 9px;border-radius:8px;color:var(--muted);
+    transition:background .15s;
+  }
+  .eye:hover{background:#e9f5ff;}
+
+  .hint{font-size:.78rem;color:var(--muted);margin:8px 0 0;line-height:1.5;}
+
+  .btn{
+    width:100%;padding:13px 16px;border-radius:12px;border:none;
+    font-size:.95rem;font-weight:700;font-family:inherit;
+    cursor:pointer;margin-bottom:10px;transition:all .2s ease;
+  }
+  .btn.primary{
+    background:linear-gradient(135deg,#4fc3f7,#1e88e5);
+    color:#fff;box-shadow:0 8px 18px rgba(30,136,229,.28);
+  }
+  .btn.primary:hover:not(:disabled){
+    transform:translateY(-1px);box-shadow:0 12px 22px rgba(30,136,229,.38);
+  }
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--blue-dark);}
+  .btn.ghost:hover:not(:disabled){background:#e9f5ff;border-color:var(--blue-light);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none;}
+
+  .status{margin-top:6px;font-size:.87rem;min-height:21px;color:var(--muted);line-height:1.5;}
+  .status.ok{color:var(--ok);font-weight:600;}
+  .status.err{color:var(--err);font-weight:600;}
+  .status.busy{color:var(--blue-dark);font-weight:600;}
+
+  .app-footer{
+    margin:28px 0 0;padding:22px 12px 30px;text-align:center;
+    font-size:.8rem;color:#5b7f99;line-height:1.75;
+  }
+  .app-footer .brand{font-size:.9rem;color:var(--blue-dark);font-weight:700;}
+  .app-footer .legal{max-width:680px;margin:6px auto 0;font-size:.75rem;opacity:.9;}
+
+  @media (max-width:560px){
+    .app-header{padding:16px;gap:12px;}
+    .logo{width:48px;height:48px;font-size:12px;}
+    .head-text h1{font-size:1.05rem;}
+    .panel{padding:17px;}
+    .tab{font-size:.85rem;padding:11px 8px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="app-header">
+    <div class="logo">MBBS</div>
+    <div class="head-text">
+      <h1>HTML Obfuscator &amp; Encryptor</h1>
+      <p>AES-256-CBC &nbsp;•&nbsp; PBKDF2-SHA256 &nbsp;•&nbsp; HMAC-SHA256</p>
+      <span class="dev">Developed by MBBS Technologies</span>
+    </div>
+  </header>
+
+  <div class="warn" id="cryptoWarn" hidden>
+    ⚠️ <strong>Web Crypto API unavailable.</strong> This tool needs a secure context.
+    Please open this page over <strong>https://</strong> or <strong>localhost</strong>,
+    or use a modern browser (Chrome, Edge, Firefox, Safari).
+  </div>
+
+  <div class="note">
+    🔐 <strong>How it works:</strong> the encrypted output is a normal <strong>.html</strong> file.
+    Open it in any browser and it renders <strong>exactly</strong> like your original page —
+    no prompts, no messages, no extra characters. But its source code is unreadable,
+    phrase-derived garbage. The original readable source can only be recovered via the
+    <strong>Decrypt</strong> tab using the correct phrase.
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="encrypt" type="button">🔒 Encrypt File</button>
+    <button class="tab" data-tab="decrypt" type="button">🔓 Decrypt File</button>
+  </nav>
+
+  <!-- ================= ENCRYPT PANEL ================= -->
+  <section class="panel active" id="panel-encrypt">
+
+    <div class="field">
+      <label>Step 1 — Select the HTML file to protect</label>
+      <div class="dropzone" id="dropEnc">
+        <div class="dz-icon">📄</div>
+        <div class="dz-text">
+          <strong>Drag &amp; drop</strong> your .html file here<br>
+          or click to browse
+        </div>
+      </div>
+      <input type="file" id="fileEnc" accept=".html,.htm,text/html" hidden>
+      <div class="file-chip" id="chipEnc" hidden></div>
+    </div>
+
+    <div class="field">
+      <label for="pwEnc">Step 2 — Enter a phrase / password / slogan</label>
+      <div class="pw-row">
+        <input type="password" id="pwEnc" placeholder="Enter your secret phrase" autocomplete="new-password">
+        <button class="eye" type="button" data-target="pwEnc" title="Show / hide">👁</button>
+      </div>
+      <div class="pw-row">
+        <input type="password" id="pwEnc2" placeholder="Confirm your secret phrase" autocomplete="new-password">
+        <button class="eye" type="button" data-target="pwEnc2" title="Show / hide">👁</button>
+      </div>
+      <p class="hint">
+        This phrase is the key that produces the garbled source. Keep it safe — the
+        <strong>Decrypt</strong> tab needs the same phrase to restore the readable file.
+      </p>
+    </div>
+
+    <div class="field">
+      <label>Step 3 — Encrypt &amp; download</label>
+      <button class="btn primary" id="btnEncrypt" type="button">🔐 Encrypt File</button>
+      <button class="btn ghost" id="btnDlEnc" type="button" disabled>⬇ Download Encrypted .html</button>
+    </div>
+
+    <div class="status" id="statusEnc"></div>
+  </section>
+
+  <!-- ================= DECRYPT PANEL ================= -->
+  <section class="panel" id="panel-decrypt">
+
+    <div class="field">
+      <label>Step 1 — Select the encrypted .html file</label>
+      <div class="dropzone" id="dropDec">
+        <div class="dz-icon">🔒</div>
+        <div class="dz-text">
+          <strong>Drag &amp; drop</strong> your encrypted .html file here<br>
+          or click to browse
+        </div>
+      </div>
+      <input type="file" id="fileDec" accept=".html,.htm,text/html" hidden>
+      <div class="file-chip" id="chipDec" hidden></div>
+    </div>
+
+    <div class="field">
+      <label for="pwDec">Step 2 — Enter the decryption phrase / password / slogan</label>
+      <div class="pw-row">
+        <input type="password" id="pwDec" placeholder="Enter the original secret phrase" autocomplete="off">
+        <button class="eye" type="button" data-target="pwDec" title="Show / hide">👁</button>
+      </div>
+      <p class="hint">The phrase must match exactly — it is case-sensitive.</p>
+    </div>
+
+    <div class="field">
+      <label>Step 3 — Decrypt &amp; download</label>
+      <button class="btn primary" id="btnDecrypt" type="button">🔓 Decrypt File</button>
+      <button class="btn ghost" id="btnDlDec" type="button" disabled>⬇ Download Restored .html</button>
+    </div>
+
+    <div class="status" id="statusDec"></div>
+  </section>
+
+  <footer class="app-footer">
+    <div class="brand">MBBS Technologies — HTML Obfuscator &amp; Encryptor</div>
+    <div>© <span id="year">2025</span> MBBS Technologies. All rights reserved.</div>
+    <div class="legal">
+      This application, including its design, source code and underlying logic, is the
+      intellectual property of MBBS Technologies. Unauthorised copying, modification,
+      redistribution, reverse-engineering or resale — in whole or in part — is strictly prohibited.
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     1. RIGHT-CLICK & VIEW-SOURCE DETERRENTS
+     ========================================================= */
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  document.addEventListener('keydown', function (e) {
+    var k = (e.key || '').toLowerCase();
+    if (k === 'f12') { e.preventDefault(); return false; }
+    if (e.ctrlKey && e.shiftKey && (k === 'i' || k === 'j' || k === 'c')) { e.preventDefault(); return false; }
+    if (e.ctrlKey && k === 'u') { e.preventDefault(); return false; }
+  });
+
+  /* =========================================================
+     2. CONSTANTS
+     ========================================================= */
+  var ITERATIONS = 100000;
+
+  var MASK_DATA = [
+    0x5A,0xC3,0x17,0x9E,0x42,0x8B,0xF0,0x36,0x6D,0xA1,0x2C,0xE8,0x74,0x0F,0xB9,0x53,
+    0x91,0xDE,0x28,0x67,0xAB,0x04,0x7C,0xE2,0x35,0x8F,0xD6,0x1A,0x49,0xB0,0x6E,0xF7,
+    0x82,0x3D,0xC9,0x15,0xAE,0x70,0x2B,0x94,0xDF,0x48,0x63,0xF1,0x0C,0xA7,0x59,0xB6,
+    0x24,0xED,0x8A,0x31,0x76,0xC0,0x1F,0x9B,0x52,0xE5,0x08,0xAD,0x64,0x3F,0xD2,0x87
+  ];
+  var MASK_KEY = [
+    0x3C,0x71,0xE9,0x05,0xB4,0x28,0x9D,0xF6,0x4A,0xC1,0x67,0x1E,0x83,0xDA,0x52,0x0B,
+    0xA6,0x39,0x7F,0xE0,0x14,0xCD,0x58,0x92,0x2D,0xB7,0x6A,0xF3,0x41,0x8E,0x05,0xDC,
+    0x73,0x1B,0xA9,0x60,0xE4,0x37,0x8C,0xF9,0x2E,0xC6,0x54,0x0D,0x9A,0x61,0xB3,0x78,
+    0xEF,0x12,0x85,0x3A,0xD1,0x6C,0x07,0xBE,0x49,0x95,0x20,0xF8,0x5E,0xA3,0x34,0xCB
+  ];
+
+  var te = new TextEncoder();
+  var td = new TextDecoder('utf-8');
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var cryptoOK = !!(window.crypto && window.crypto.subtle);
+  if (!cryptoOK) { $('cryptoWarn').hidden = false; }
+
+  $('year').textContent = new Date().getFullYear();
+
+  /* =========================================================
+     3. LOW-LEVEL HELPERS
+     ========================================================= */
+  function concatBytes() {
+    var total = 0, i;
+    for (i = 0; i < arguments.length; i++) total += arguments[i].length;
+    var out = new Uint8Array(total), off = 0;
+    for (i = 0; i < arguments.length; i++) {
+      out.set(arguments[i], off);
+      off += arguments[i].length;
+    }
+    return out;
+  }
+
+  function toB64(bytes) {
+    var s = '', chunk = 0x8000, i;
+    for (i = 0; i < bytes.length; i += chunk) {
+      s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(s);
+  }
+
+  function fromB64(str) {
+    var clean = String(str).replace(/[^A-Za-z0-9+/=]/g, '');
+    var bin = atob(clean), out = new Uint8Array(bin.length), i;
+    for (i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function xorMask(bytes, mask) {
+    var out = new Uint8Array(bytes.length), i;
+    for (i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ mask[i % mask.length];
+    return out;
+  }
+
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    return (b / 1048576).toFixed(2) + ' MB';
+  }
+
+  function setStatus(el, msg, cls) {
+    el.textContent = msg;
+    el.className = 'status' + (cls ? ' ' + cls : '');
+  }
+
+  function showChip(chipEl, file) {
+    chipEl.hidden = false;
+    chipEl.textContent = '';
+    var a = document.createElement('span');
+    a.textContent = '📄 ' + file.name;
+    var b = document.createElement('span');
+    b.textContent = fmtSize(file.size);
+    chipEl.appendChild(a);
+    chipEl.appendChild(b);
+  }
+
+  function download(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 1500);
+  }
+
+  /* =========================================================
+     4. ENCODING DETECTION (fixes stray characters on non-UTF-8 files)
+     ========================================================= */
+  function detectEncoding(bytes) {
+    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return 'utf-8';
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return 'utf-16le';
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return 'utf-16be';
+
+    var n = Math.min(4096, bytes.length);
+    var s = '';
+    for (var i = 0; i < n; i++) s += String.fromCharCode(bytes[i]);
+    s = s.toLowerCase();
+
+    var m = s.match(/<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_\-]+)/);
+    if (m) {
+      var name = m[1];
+      if (name === 'utf8' || name === 'utf-8') return 'utf-8';
+      if (name === 'latin1' || name === 'iso-8859-1') return 'windows-1252';
+      return name;
+    }
+    return 'utf-8';
+  }
+
+  async function readHtmlFile(file) {
+    var buf = await file.arrayBuffer();
+    var bytes = new Uint8Array(buf);
+    var enc = detectEncoding(bytes);
+    try {
+      return new TextDecoder(enc, { fatal: false }).decode(bytes);
+    } catch (e) {
+      return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    }
+  }
+
+  /* =========================================================
+     5. CRYPTO CORE
+     ========================================================= */
+  async function deriveMaterial(password, salt) {
+    var km = await crypto.subtle.importKey(
+      'raw', te.encode(password), 'PBKDF2', false, ['deriveBits']
+    );
+    var bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: salt, iterations: ITERATIONS, hash: 'SHA-256' },
+      km, 512
+    );
+    return new Uint8Array(bits);
+  }
+
+  /* =========================================================
+     6. WRAPPED FILE BUILDER
+     ---------------------------------------------------------
+     Payload layout (all inside the obfuscated base64 blob):
+        [0..15]   salt
+        [16..31]  IV          <-- the fix: runtime must use THIS
+        [32..63]  HMAC tag
+        [64..]    ciphertext
+
+     The runtime below reads IV from bytes 16..31 and ciphertext
+     from byte 64 onward, which matches the encryption layout.
+     ========================================================= */
+  var RUNTIME_JS = [
+    '(function(){',
+    'var M=' + JSON.stringify(MASK_DATA) + ';',
+    'var K=' + JSON.stringify(MASK_KEY) + ';',
+    'var D="__D__";',
+    'var E="__E__";',
+    'function bd(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}',
+    'function xr(a,m){var o=new Uint8Array(a.length);for(var i=0;i<a.length;i++)o[i]=a[i]^m[i%m.length];return o;}',
+    'var p=xr(bd(D),M);',
+    'if(p.length<64)return;',
+    'var iv=p.slice(16,32);',
+    'var ct=p.slice(64);',
+    'var kb=xr(bd(E),K);',
+    'if(kb.length<32)return;',
+    'if(!(window.crypto&&window.crypto.subtle))return;',
+    'crypto.subtle.importKey("raw",kb.slice(0,32),{name:"AES-CBC"},false,["decrypt"])',
+    '.then(function(k){return crypto.subtle.decrypt({name:"AES-CBC",iv:iv},k,ct);})',
+    '.then(function(buf){var h=new TextDecoder("utf-8").decode(buf);document.open();document.write(h);document.close();})',
+    '.catch(function(){});',
+    '})();'
+  ].join('\n');
+
+  function buildWrappedFile(b64Payload, b64Key) {
+    // Inject the base64 strings safely via JSON.stringify
+    var runtime = RUNTIME_JS
+      .replace('"__D__"', JSON.stringify(b64Payload))
+      .replace('"__E__"', JSON.stringify(b64Key));
+
+    return [
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head>',
+      '<meta charset="utf-8">',
+      '<meta name="viewport" content="width=device-width,initial-scale=1">',
+      '<title></title>',
+      '<style>html,body{margin:0;padding:0;background:#fff}</style>',
+      '</head>',
+      '<body>',
+      '<script>',
+      runtime,
+      '<\/script>',
+      '</body>',
+      '</html>',
+      ''
+    ].join('\n');
+  }
+
+  /* =========================================================
+     7. UI — TABS
+     ========================================================= */
+  var tabs = document.querySelectorAll('.tab');
+  Array.prototype.forEach.call(tabs, function (tab) {
+    tab.addEventListener('click', function () {
+      Array.prototype.forEach.call(tabs, function (x) { x.classList.remove('active'); });
+      Array.prototype.forEach.call(document.querySelectorAll('.panel'), function (p) {
+        p.classList.remove('active');
+      });
+      tab.classList.add('active');
+      $('panel-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.eye'), function (btn) {
+    btn.addEventListener('click', function () {
+      var inp = $(btn.dataset.target);
+      if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+      else { inp.type = 'password'; btn.textContent = '👁'; }
+    });
+  });
+
+  /* =========================================================
+     8. UI — DROPZONES
+     ========================================================= */
+  function setupDropzone(zone, input, onFile) {
+    zone.addEventListener('click', function () { input.click(); });
+
+    input.addEventListener('change', function () {
+      if (input.files && input.files[0]) onFile(input.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.add('drag');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.remove('drag');
+      });
+    });
+
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.remove('drag');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) onFile(f);
+    });
+  }
+
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  /* =========================================================
+     9. ENCRYPT FLOW
+     ========================================================= */
+  var encFile = null, encBlob = null, encName = '';
+
+  setupDropzone($('dropEnc'), $('fileEnc'), function (f) {
+    encFile = f;
+    showChip($('chipEnc'), f);
+    encBlob = null;
+    $('btnDlEnc').disabled = true;
+    $('btnDlEnc').textContent = '⬇ Download Encrypted .html';
+    setStatus($('statusEnc'), 'File loaded. Now enter your secret phrase.', '');
+  });
+
+  $('btnEncrypt').addEventListener('click', async function () {
+    var status = $('statusEnc');
+    var btn = this;
+
+    if (!cryptoOK) {
+      setStatus(status, '❌ Encryption is not supported in this browser or context.', 'err');
+      return;
+    }
+    if (!encFile) {
+      setStatus(status, '❌ Please select an HTML file first.', 'err');
+      return;
+    }
+
+    var pw = $('pwEnc').value;
+    var pw2 = $('pwEnc2').value;
+
+    if (pw.length < 6) {
+      setStatus(status, '❌ Your phrase must be at least 6 characters long.', 'err');
+      return;
+    }
+    if (pw !== pw2) {
+      setStatus(status, '❌ The two phrases do not match.', 'err');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Encrypting…';
+    setStatus(status, 'Deriving key and encrypting — please wait…', 'busy');
+
+    try {
+      var htmlText = await readHtmlFile(encFile);
+
+      // Strip BOM if any survived
+      if (htmlText.charCodeAt(0) === 0xFEFF) {
+        htmlText = htmlText.substring(1);
+      }
+
+      var salt = crypto.getRandomValues(new Uint8Array(16));
+      var iv   = crypto.getRandomValues(new Uint8Array(16));
+
+      var material = await deriveMaterial(pw, salt);
+      var aesRaw = material.slice(0, 32);
+      var macRaw = material.slice(32, 64);
+
+      var aesKey = await crypto.subtle.importKey(
+        'raw', aesRaw, { name: 'AES-CBC' }, false, ['encrypt']
+      );
+
+      var ct = new Uint8Array(await crypto.subtle.encrypt(
+        { name: 'AES-CBC', iv: iv }, aesKey, te.encode(htmlText)
+      ));
+
+      var hmacKey = await crypto.subtle.importKey(
+        'raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      var mac = new Uint8Array(await crypto.subtle.sign(
+        'HMAC', hmacKey, concatBytes(salt, iv, ct)
+      ));
+
+      // salt(16) | iv(16) | mac(32) | ct  ->  XOR  ->  base64
+      var payload = concatBytes(salt, iv, mac, ct);
+      var obfPayload = xorMask(payload, MASK_DATA);
+      var obfKey = xorMask(aesRaw, MASK_KEY);
+
+      var b64Payload = toB64(obfPayload);
+      var b64Key = toB64(obfKey);
+
+      var outName = encFile.name.replace(/\.(html?|HTML?)$/, '') + '.html';
+      if (!/\.html$/i.test(outName)) outName += '.html';
+
+      var fileText = buildWrappedFile(b64Payload, b64Key);
+      encBlob = new Blob([fileText], { type: 'text/html;charset=utf-8' });
+      encName = outName;
+
+      $('btnDlEnc').disabled = false;
+      $('btnDlEnc').textContent = '⬇ Download “' + encName + '”';
+      setStatus(
+        status,
+        '✅ Encrypted successfully (' + fmtSize(encBlob.size) + '). ' +
+        'The file will render exactly like the original, with no extra characters.',
+        'ok'
+      );
+    } catch (err) {
+      setStatus(status, '❌ Encryption failed: ' + (err && err.message ? err.message : err), 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔐 Encrypt File';
+    }
+  });
+
+  $('btnDlEnc').addEventListener('click', function () {
+    if (encBlob) download(encBlob, encName);
+  });
+
+  /* =========================================================
+     10. DECRYPT FLOW
+     ========================================================= */
+  var decFile = null, decBlob = null, decName = '';
+
+  setupDropzone($('dropDec'), $('fileDec'), function (f) {
+    decFile = f;
+    showChip($('chipDec'), f);
+    decBlob = null;
+    $('btnDlDec').disabled = true;
+    $('btnDlDec').textContent = '⬇ Download Restored .html';
+    setStatus($('statusDec'), 'Encrypted file loaded. Enter the original phrase.', '');
+  });
+
+  // Extract the base64 string assigned to a runtime variable (var NAME="...")
+  function extractVar(text, varName) {
+    var re = new RegExp('var\\s+' + varName + '\\s*=\\s*"([^"]+)"');
+    var m = text.match(re);
+    return m ? m[1] : null;
+  }
+
+  $('btnDecrypt').addEventListener('click', async function () {
+    var status = $('statusDec');
+    var btn = this;
+
+    if (!cryptoOK) {
+      setStatus(status, '❌ Decryption is not supported in this browser or context.', 'err');
+      return;
+    }
+    if (!decFile) {
+      setStatus(status, '❌ Please select an encrypted .html file first.', 'err');
+      return;
+    }
+
+    var pw = $('pwDec').value;
+    if (!pw) {
+      setStatus(status, '❌ Please enter the decryption phrase.', 'err');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Decrypting…';
+    setStatus(status, 'Verifying and decrypting — please wait…', 'busy');
+
+    try {
+      var text = await decFile.text();
+
+      var b64Payload = extractVar(text, 'D');
+      if (!b64Payload) throw new Error('NOT_MBBS');
+
+      var payload;
+      try { payload = xorMask(fromB64(b64Payload), MASK_DATA); }
+      catch (e) { throw new Error('BAD_FORMAT'); }
+
+      if (payload.length < 80) throw new Error('BAD_FORMAT');
+
+      var salt = payload.slice(0, 16);
+      var iv   = payload.slice(16, 32);
+      var mac  = payload.slice(32, 64);
+      var ct   = payload.slice(64);
+
+      var material = await deriveMaterial(pw, salt);
+      var aesRaw = material.slice(0, 32);
+      var macRaw = material.slice(32, 64);
+
+      var hmacKey = await crypto.subtle.importKey(
+        'raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+      );
+      var ok = await crypto.subtle.verify(
+        'HMAC', hmacKey, mac, concatBytes(salt, iv, ct)
+      );
+      if (!ok) throw new Error('WRONG_PASSWORD');
+
+      var aesKey = await crypto.subtle.importKey(
+        'raw', aesRaw, { name: 'AES-CBC' }, false, ['decrypt']
+      );
+      var plain = new Uint8Array(await crypto.subtle.decrypt(
+        { name: 'AES-CBC', iv: iv }, aesKey, ct
+      ));
+
+      var restoredHtml = td.decode(plain);
+
+      var originalName = decFile.name.replace(/\.html?$/i, '') + '.restored.html';
+
+      decBlob = new Blob([restoredHtml], { type: 'text/html;charset=utf-8' });
+      decName = originalName;
+
+      $('btnDlDec').disabled = false;
+      $('btnDlDec').textContent = '⬇ Download “' + decName + '”';
+      setStatus(
+        status,
+        '✅ Decrypted successfully (' + fmtSize(decBlob.size) + '). Click Download to save the readable file.',
+        'ok'
+      );
+    } catch (err) {
+      var m = err && err.message ? err.message : String(err);
+      if (m === 'WRONG_PASSWORD') {
+        setStatus(status, '❌ Incorrect phrase. The file could not be decrypted.', 'err');
+      } else if (m === 'NOT_MBBS') {
+        setStatus(status, '❌ This is not an MBBS Technologies encrypted file.', 'err');
+      } else if (m === 'BAD_FORMAT') {
+        setStatus(status, '❌ The encrypted file appears to be corrupted or incomplete.', 'err');
+      } else {
+        setStatus(status, '❌ Decryption failed: ' + m, 'err');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔓 Decrypt File';
+    }
+  });
+
+  $('btnDlDec').addEventListener('click', function () {
+    if (decBlob) download(decBlob, decName);
+  });
+
+})();
+</script>
+</body>
+</html>
